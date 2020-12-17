@@ -1,0 +1,17 @@
+# IDE
+.idea/
+.vscode/
+
+# Yarn
+yarn.lock
+yarn-error.log
+
+# Node
+node_modules/
+
+# Tests
+tests/
+
+# Build
+dist/
+
