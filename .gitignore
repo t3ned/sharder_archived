@@ -10,7 +10,7 @@ yarn-error.log
 node_modules/
 
 # Tests
-tests/
+src/tests/
 
 # Build
 dist/
