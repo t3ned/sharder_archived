@@ -1,8 +1,8 @@
 import { Client, ClientOptions } from "eris";
-import { Cluster } from "./Cluster";
+import { Cluster, RawCluster } from "./Cluster";
 
 import { EventEmitter } from "events";
-import { isMaster, setupMaster } from "cluster";
+import { isMaster, setupMaster, fork } from "cluster";
 import { cpus } from "os";
 
 import { ShardQueue } from "../util/ShardQueue";
@@ -22,6 +22,9 @@ export class ClusterManager extends EventEmitter {
 
     public clusterCount: number | "auto";
     public shardsPerCluster: number;
+
+    public clusters = new Map<number, RawCluster>();
+    public workers = new Map<number, number>();
 
     public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
         super();
@@ -64,7 +67,7 @@ export class ClusterManager extends EventEmitter {
                Logger.info("Cluster Manager", `Starting ${this.clusterCount} clusters with ${this.shardCount} shards`);
                setupMaster({ silent: false });
 
-               // TODO - Start clusters
+               this.startCluster(0);
             });
         } else {
             const cluster = new Cluster(this);
@@ -72,6 +75,27 @@ export class ClusterManager extends EventEmitter {
         }
 
         // TODO - Listen for process messages
+    }
+
+    private startCluster(clusterID: number) {
+        if (clusterID === this.clusterCount) return; // TODO - Connect shards
+
+        // Spawn a cluster worker
+        const worker = fork();
+
+        // Cache this worker
+        this.workers.set(worker.id, clusterID);
+        this.clusters.set(clusterID, {
+            workerID: worker.id,
+            shardCount: this.shardCount as number,
+            firstShardID: 0,
+            lastShardID: 0
+        });
+
+        Logger.info("Cluster Manager", `Started cluster ${clusterID}`);
+
+        // Start other clusters
+        this.startCluster(++clusterID);
     }
 
     /**

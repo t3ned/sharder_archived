@@ -16,3 +16,10 @@ export class Cluster {
 
     }
 }
+
+export interface RawCluster {
+    workerID: number;
+    shardCount: number
+    firstShardID: number;
+    lastShardID: number;
+}
