@@ -77,6 +77,11 @@ export class ClusterManager extends EventEmitter {
         // TODO - Listen for process messages
     }
 
+    /**
+     * Forks a worker and assigns it to a the cluster specified
+     * @param clusterID
+     * @private
+     */
     private startCluster(clusterID: number) {
         if (clusterID === this.clusterCount) return; // TODO - Connect shards
 
