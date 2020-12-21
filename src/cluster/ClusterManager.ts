@@ -47,7 +47,6 @@ export class ClusterManager extends EventEmitter {
      * Launches all the clusters
      */
     public launchClusters() {
-        // TODO - Calculate shard count
         if (isMaster) {
             // TODO - Print ascii art name
 
