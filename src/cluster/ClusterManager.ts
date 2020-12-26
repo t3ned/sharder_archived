@@ -102,7 +102,7 @@ export class ClusterManager extends EventEmitter {
     private startCluster(clusterID: number) {
         if (clusterID === this.clusterCount) return this.connectShards();
 
-        // Spawn a cluster worker
+        // Start next cluster
         const worker = fork();
 
         // Cache this worker
