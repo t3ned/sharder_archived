@@ -13,6 +13,12 @@ export class Cluster {
     }
 
     public spawn() {
+        // TODO - uncaughtException
+        // TODO - unhandledRejection
+        // TODO - connect process message
+    }
+
+    public connect() {
 
     }
 }

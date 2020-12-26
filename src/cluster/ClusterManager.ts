@@ -2,7 +2,7 @@ import { Client, ClientOptions } from "eris";
 import { Cluster, RawCluster } from "./Cluster";
 
 import { EventEmitter } from "events";
-import { isMaster, setupMaster, fork } from "cluster";
+import { isMaster, setupMaster, fork, workers } from "cluster";
 import { cpus } from "os";
 
 import { ShardQueue } from "../util/ShardQueue";
@@ -10,6 +10,7 @@ import Logger from "../util/Logger";
 
 export class ClusterManager extends EventEmitter {
     public queue = new ShardQueue();
+    public clientOptions: ClientOptions;
     public clientBase: typeof Client;
     public client: Client;
 
@@ -32,6 +33,7 @@ export class ClusterManager extends EventEmitter {
         // Hide the token when the manager is logged
         Object.defineProperty(this, "token", { value: token });
         Object.defineProperty(this, "client", { value: new Client(this.token) });
+        Object.defineProperty(this, "clientOptions", { value: options.clientOptions ?? {} })
 
         this.clientBase = options.client ?? Client;
 
@@ -75,6 +77,14 @@ export class ClusterManager extends EventEmitter {
         }
 
         // TODO - Listen for process messages
+
+        this.queue.on("execute", (item) => {
+            const cluster = this.clusters.get(item.item);
+            if (cluster) {
+                const worker = workers[cluster.workerID]!;
+                worker.send(item.value);
+            }
+        });
     }
 
     /**
@@ -83,7 +93,7 @@ export class ClusterManager extends EventEmitter {
      * @private
      */
     private startCluster(clusterID: number) {
-        if (clusterID === this.clusterCount) return; // TODO - Connect shards
+        if (clusterID === this.clusterCount) return this.connectShards();
 
         // Spawn a cluster worker
         const worker = fork();
@@ -101,6 +111,82 @@ export class ClusterManager extends EventEmitter {
 
         // Start other clusters
         this.startCluster(++clusterID);
+    }
+
+    /**
+     * Connects the shards to the discord gateway
+     * @private
+     */
+    private connectShards() {
+        Logger.info("Cluster Manager", "Started all clusters, connecting shards...");
+
+        const chunkedShards = this.chunkShards();
+
+        // Queue each cluster for connection
+        for (let clusterID = 0; clusterID < chunkedShards.length; clusterID++) {
+            const cluster = this.clusters.get(clusterID)!;
+
+            this.queue.enqueue({
+                item: clusterID,
+                value: {
+                    id: clusterID,
+                    name: "connect",
+                    token: this.token,
+                    clientBase: this.clientBase,
+                    clusterCount: this.clusterCount as number,
+                    shardCount: this.shardCount as number,
+                    firstShardID: cluster.firstShardID,
+                    lastShardID: cluster.lastShardID,
+                    clientOptions: this.clientOptions
+                }
+            })
+        }
+
+        Logger.info("Cluster Manager", "All shards spread");
+    }
+
+    /**
+     * Splits the shards across all the clusters
+     * @private
+     */
+    private chunkShards() {
+        const shards: number[] = [];
+        const chunked: number[][] = [];
+
+        // Fill the shards array with shard IDs from firstShardID to lastShardID
+        for (let shardID = this.firstShardID; shardID <= this.lastShardID; shardID++)
+            shards.push(shardID);
+
+        // Split the shards into their clusters
+        let clusterCount = this.clusterCount as number;
+        let size = 0;
+        let i = 0;
+
+        if (shards.length % clusterCount === 0) {
+            size = Math.floor(shards.length / clusterCount);
+            while (i < shards.length)
+                chunked.push(shards.slice(i, (i += size)));
+        } else {
+            while (i < shards.length) {
+                size = Math.ceil((shards.length - i) / clusterCount--);
+                chunked.push(shards.slice(i, (i += size)));
+            }
+        }
+
+        // Cache the details for each cluster
+        for (const [clusterID, chunk] of chunked.entries()) {
+            const cluster = this.clusters.get(clusterID);
+
+            this.clusters.set(
+                clusterID,
+                Object.assign(cluster, {
+                    firstShardID: Math.min(...chunk),
+                    lastShardID: Math.max(...chunk)
+                })
+            );
+        }
+
+        return chunked;
     }
 
     /**
