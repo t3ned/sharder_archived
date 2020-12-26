@@ -6,7 +6,7 @@ import { isMaster, setupMaster, fork, workers } from "cluster";
 import { cpus } from "os";
 
 import { ShardQueue } from "../util/ShardQueue";
-import Logger from "../util/Logger";
+import { Logger, LoggerOptions } from "@nedbot/logger";
 
 export class ClusterManager extends EventEmitter {
     public queue = new ShardQueue();
@@ -27,6 +27,8 @@ export class ClusterManager extends EventEmitter {
     public clusters = new Map<number, RawCluster>();
     public workers = new Map<number, number>();
 
+    public logger: Logger;
+
     public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
         super();
 
@@ -45,6 +47,11 @@ export class ClusterManager extends EventEmitter {
         this.clusterCount = options.clusterCount ?? "auto";
         this.shardsPerCluster = options.shardsPerCluster ?? 0;
 
+        this.logger = new Logger(options.loggerOptions ?? {
+            enableErrorLogs: false,
+            enableInfoLogs: false
+        });
+
         this.launchClusters();
     }
 
@@ -56,17 +63,17 @@ export class ClusterManager extends EventEmitter {
             // TODO - Print ascii art name
 
             process.on("uncaughtException", (error) => {
-                Logger.error("Cluster Manager", error.stack ?? error.message);
+                this.logger.error("Cluster Manager", error.stack ?? error.message);
             });
 
             process.nextTick(async () => {
-               Logger.info("Cluster Manager", "Initialising clusters...");
+               this.logger.info("Cluster Manager", "Initialising clusters...");
 
                this.shardCount = await this.validateShardCount();
                this.clusterCount = this.calculateClusterCount();
                this.lastShardID ||= this.shardCount - 1;
 
-               Logger.info("Cluster Manager", `Starting ${this.clusterCount} clusters with ${this.shardCount} shards`);
+               this.logger.info("Cluster Manager", `Starting ${this.clusterCount} clusters with ${this.shardCount} shards`);
                setupMaster({ silent: false });
 
                this.startCluster(0);
@@ -107,7 +114,7 @@ export class ClusterManager extends EventEmitter {
             lastShardID: 0
         });
 
-        Logger.info("Cluster Manager", `Started cluster ${clusterID}`);
+        this.logger.info("Cluster Manager", `Started cluster ${clusterID}`);
 
         // Start other clusters
         this.startCluster(++clusterID);
@@ -118,7 +125,7 @@ export class ClusterManager extends EventEmitter {
      * @private
      */
     private connectShards() {
-        Logger.info("Cluster Manager", "Started all clusters, connecting shards...");
+        this.logger.info("Cluster Manager", "Started all clusters, connecting shards...");
 
         const chunkedShards = this.chunkShards();
 
@@ -142,7 +149,7 @@ export class ClusterManager extends EventEmitter {
             })
         }
 
-        Logger.info("Cluster Manager", "All shards spread");
+        this.logger.info("Cluster Manager", "All shards spread");
     }
 
     /**
@@ -235,6 +242,7 @@ export interface ClusterManager {
 export interface ClusterManagerOptions {
     client: typeof Client;
     clientOptions: ClientOptions;
+    loggerOptions: LoggerOptions;
 
     shardCount: number | "auto";
     firstShardID: number;

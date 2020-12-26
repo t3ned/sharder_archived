@@ -8,8 +8,7 @@
   "license": "Apache-2.0",
   "private": false,
   "dependencies": {
-    "@types/chalk": "^2.2.0",
-    "chalk": "^4.1.0",
+    "@nedbot/logger": "^1.0.1",
     "eris": "^0.14.0"
   },
   "devDependencies": {
