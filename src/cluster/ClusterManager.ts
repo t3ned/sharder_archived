@@ -44,7 +44,7 @@ export class ClusterManager extends EventEmitter {
         this.lastShardID = options.lastShardID ?? 0;
         this.guildsPerShard = options.guildsPerShard ?? 1000;
 
-        this.clusterCount = options.clusterCount ?? "auto";
+        this.clusterCount = options.clusterCount || "auto";
         this.shardsPerCluster = options.shardsPerCluster ?? 0;
 
         this.logger = new Logger(options.loggerOptions ?? {
@@ -225,9 +225,13 @@ export class ClusterManager extends EventEmitter {
         const { clusterCount, shardsPerCluster, shardCount } = this;
 
         // Provided clusterCount is valid
-        if (typeof clusterCount === "number") return clusterCount;
+        if (typeof clusterCount === "number") {
+            if (shardsPerCluster && clusterCount * shardsPerCluster < shardCount)
+                throw new TypeError(`Invalid \`shardsPerCluster\` provided. \`shardCount\` should be >= \`clusterCount\` * \`shardsPerCluster\``);
+            return clusterCount;
+        }
         // Use the count of cpus to determine cluster count
-        if (!shardsPerCluster) return cpus().length;
+        if (shardsPerCluster === 0) return cpus().length;
 
         // Calculate the total clusters with the configured options
         const clusterCountDecimal = (shardCount as number) / shardsPerCluster;
