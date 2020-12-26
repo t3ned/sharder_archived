@@ -230,6 +230,7 @@ export class ClusterManager extends EventEmitter {
                 throw new TypeError(`Invalid \`shardsPerCluster\` provided. \`shardCount\` should be >= \`clusterCount\` * \`shardsPerCluster\``);
             return clusterCount;
         }
+
         // Use the count of cpus to determine cluster count
         if (shardsPerCluster === 0) return cpus().length;
 
