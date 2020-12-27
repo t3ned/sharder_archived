@@ -2,7 +2,7 @@ import { Client, ClientOptions } from "eris";
 import { Cluster, RawCluster } from "./Cluster";
 
 import { EventEmitter } from "events";
-import { isMaster, setupMaster, fork, workers, on } from "cluster";
+import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
 import { cpus } from "os";
 
 import { ShardQueue } from "../util/ShardQueue";
@@ -30,6 +30,7 @@ export class ClusterManager extends EventEmitter {
 
     public logger: Logger;
     public statsUpdateInterval: number;
+    public stats: ClusterManagerStats;
 
     public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
         super();
@@ -50,10 +51,23 @@ export class ClusterManager extends EventEmitter {
         this.clusterTimeout = options.clusterTimeout ?? 5000;
         this.shardsPerCluster = options.shardsPerCluster ?? 0;
 
+        this.statsUpdateInterval = options.statsUpdateInterval ?? 0;
+
         this.logger = new Logger(options.loggerOptions ?? {
             enableErrorLogs: false,
             enableInfoLogs: false
         });
+
+        this.stats = {
+            shards: 0,
+            clusters: 0,
+            guilds: 0,
+            users: 0,
+            channels: 0,
+            latency: 0,
+            ramUsage: 0,
+            voiceConnections: 0,
+        }
 
         this.launchClusters();
     }
@@ -103,6 +117,23 @@ export class ClusterManager extends EventEmitter {
                 worker.send(item);
             }
         });
+    }
+
+    public updateStats(clusters: Worker[], start: number) {
+        const worker = clusters[start];
+
+        if (worker) {
+            worker.send({ name: "updateStats" });
+            this.updateStats(clusters, ++start);
+        }
+    }
+
+    private startStatsUpdate() {
+        if (!this.statsUpdateInterval) return;
+        setInterval(() => {
+            const clusters = Object.values(workers).filter(Boolean) as Worker[];
+            this.updateStats(clusters, 0);
+        }, this.statsUpdateInterval);
     }
 
     /**
@@ -156,6 +187,7 @@ export class ClusterManager extends EventEmitter {
         }
 
         this.logger.info("Cluster Manager", "All shards spread");
+        this.startStatsUpdate();
     }
 
     /**
@@ -266,4 +298,15 @@ export interface ClusterManagerOptions {
     shardsPerCluster: number;
 
     statsUpdateInterval: number;
+}
+
+export interface ClusterManagerStats {
+    shards: number;
+    clusters: number;
+    guilds: number;
+    users: number;
+    channels: number;
+    latency: number;
+    ramUsage: number;
+    voiceConnections: number;
 }
