@@ -22,6 +22,7 @@ export class ClusterManager extends EventEmitter {
     public guildsPerShard: number;
 
     public clusterCount: number | "auto";
+    public clusterTimeout: number;
     public shardsPerCluster: number;
 
     public clusters = new Map<number, RawCluster>();
@@ -45,6 +46,7 @@ export class ClusterManager extends EventEmitter {
         this.guildsPerShard = options.guildsPerShard ?? 1000;
 
         this.clusterCount = options.clusterCount || "auto";
+        this.clusterTimeout = options.clusterTimeout ?? 5000;
         this.shardsPerCluster = options.shardsPerCluster ?? 0;
 
         this.logger = new Logger(options.loggerOptions ?? {
@@ -90,8 +92,7 @@ export class ClusterManager extends EventEmitter {
            switch (message.name) {
                case "shardsStarted":
                    this.queue.next();
-                   // TODO - clusterTimeout options
-                   if (this.queue.length) setTimeout(() => this.queue.execute(), 5000);
+                   if (this.queue.length) setTimeout(() => this.queue.execute(), this.clusterTimeout);
                    break;
            }
         });
@@ -262,5 +263,6 @@ export interface ClusterManagerOptions {
     guildsPerShard: number;
 
     clusterCount: number | "auto";
+    clusterTimeout: number;
     shardsPerCluster: number;
 }
