@@ -28,11 +28,6 @@ export interface ShardQueue {
 }
 
 export interface QueueItem {
-    item: number;
-    value: QueueItemValue;
-}
-
-export interface QueueItemValue {
     clusterID: number,
     name: "connect",
     token: string,

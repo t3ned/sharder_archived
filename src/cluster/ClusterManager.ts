@@ -97,10 +97,10 @@ export class ClusterManager extends EventEmitter {
         });
 
         this.queue.on("execute", (item) => {
-            const cluster = this.clusters.get(item.item);
+            const cluster = this.clusters.get(item.clusterID);
             if (cluster) {
                 const worker = workers[cluster.workerID]!;
-                worker.send(item.value);
+                worker.send(item);
             }
         });
     }
@@ -145,16 +145,13 @@ export class ClusterManager extends EventEmitter {
             const cluster = this.clusters.get(clusterID)!;
 
             this.queue.enqueue({
-                item: clusterID,
-                value: {
-                    clusterID,
-                    name: "connect",
-                    token: this.token,
-                    clusterCount: this.clusterCount as number,
-                    shardCount: cluster.shardCount,
-                    firstShardID: cluster.firstShardID,
-                    lastShardID: cluster.lastShardID
-                }
+                clusterID,
+                name: "connect",
+                token: this.token,
+                clusterCount: this.clusterCount as number,
+                shardCount: cluster.shardCount,
+                firstShardID: cluster.firstShardID,
+                lastShardID: cluster.lastShardID
             });
         }
 
