@@ -111,17 +111,20 @@ export class ClusterManager extends EventEmitter {
                case "statsUpdate": {
                    const {
                        guilds, users, voiceConnections,
-                       shards, channels, ramUsage
+                       shards, channels, ramUsage, id
                    } = message.stats;
 
-                   this.stats.guilds += guilds;
-                   this.stats.users += users;
-                   this.stats.shards += shards;
-                   this.stats.channels += channels;
                    this.stats.ramUsage += ramUsage;
-                   this.stats.voiceConnections += voiceConnections;
-                   this.stats.clustersLaunched++;
-                   this.stats.clusters.push(message.stats);
+
+                   if (id !== -1) {
+                       this.stats.guilds += guilds;
+                       this.stats.users += users;
+                       this.stats.shards += shards;
+                       this.stats.channels += channels;
+                       this.stats.voiceConnections += voiceConnections;
+                       this.stats.clusters.push(message.stats);
+                       this.stats.clustersLaunched++;
+                   }
 
                    if (this.stats.clustersLaunched === this.clusters.size)
                        this.emit("stats", this.stats);
@@ -200,10 +203,10 @@ export class ClusterManager extends EventEmitter {
     private connectShards() {
         this.logger.info("Cluster Manager", "Started all clusters, connecting shards...");
 
-        const chunkedShards = this.chunkShards();
+        this.chunkShards();
 
         // Queue each cluster for connection
-        for (let clusterID = 0; clusterID < chunkedShards.length; clusterID++) {
+        for (let clusterID = 0; clusterID < this.clusterCount; clusterID++) {
             const cluster = this.clusters.get(clusterID)!;
 
             this.queue.enqueue({

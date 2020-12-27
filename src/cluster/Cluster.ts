@@ -40,7 +40,8 @@ export class Cluster {
                     this.lastShardID = message.lastShardID;
                     this.id = message.clusterID;
                     this.shardCount = message.shardCount;
-                    if (this.shardCount > 0) this.connect();
+                    if (this.shardCount) return this.connect();
+                    process.send!({ name: "shardsStarted" });
                     break;
                 case "statsUpdate":
                     process.send!({
