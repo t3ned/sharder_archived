@@ -37,7 +37,7 @@ export class Cluster {
 
     public connect() {
         const loggerSource = `Cluster ${this.id}`;
-        let { logger, clientOptions, token, clientBase } = this.manager;
+        const { logger, clientOptions, token, clientBase, shardCount } = this.manager;
 
         logger.info(loggerSource, `Connecting with ${this.shardCount} shards`);
 
@@ -46,7 +46,7 @@ export class Cluster {
             autoreconnect: true,
             firstShardID: this.firstShardID,
             lastShardID: this.lastShardID,
-            maxShards: this.shardCount
+            maxShards: shardCount
         };
 
         Object.assign(clientOptions, options);
