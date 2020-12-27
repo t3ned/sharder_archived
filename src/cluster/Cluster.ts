@@ -67,6 +67,22 @@ export class Cluster {
            logger.debug(loggerSource, `Shards ${this.firstShardID} - ${this.lastShardID} are ready`)
         });
 
+        client.on("shardDisconnect", (error, id) => {
+           logger.error(loggerSource, `Shard ${id} disconnected`, error);
+        });
+
+        client.on("shardResume", (id) => {
+           logger.warn(loggerSource, `Shard ${id} reconnected`);
+        });
+
+        client.on("error", (error, id) => {
+           logger.error(loggerSource, `Shard ${id} error: ${error.message}`, error);
+        });
+
+        client.on("warn", (message, id) => {
+           logger.warn(loggerSource, `Shard ${id} warning: ${message}`);
+        });
+
         client.connect();
     }
 }
