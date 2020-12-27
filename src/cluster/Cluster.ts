@@ -1,4 +1,4 @@
-import { Client } from "eris";
+import { Client, Shard } from "eris";
 import { ClusterManager } from "./ClusterManager";
 
 export class Cluster {
@@ -11,6 +11,12 @@ export class Cluster {
     public maxShards = 0;
     public firstShardID = 0;
     public lastShardID = 0;
+
+    public guilds = 0;
+    public users = 0;
+    public uptime = 0;
+    public voiceConnections = 0;
+    public shardStats: ShardStats[] = [];
 
     public constructor(manager: ClusterManager) {
         Object.defineProperty(this, "manager", { value: manager });
@@ -60,6 +66,8 @@ export class Cluster {
         const client = new clientBase(token, clientOptions);
         this.client = client;
 
+        this.startStatsUpdate(client);
+
         client.on("connect", (id) => {
             logger.debug(loggerSource, `Shard ${id} established connection`);
         });
@@ -91,6 +99,27 @@ export class Cluster {
 
         client.connect();
     }
+
+    public updateStats(client: Client) {
+        const { guilds, users, uptime,
+            voiceConnections, shards } = client;
+
+        this.guilds = guilds.size;
+        this.users = users.size;
+        this.uptime = uptime;
+        this.voiceConnections = voiceConnections.size;
+
+        this.shardStats = shards.map(shard => ({
+            id: shard.id,
+            ready: shard.ready,
+            latency: shard.latency,
+            status: shard.status
+        }));
+    }
+
+    private startStatsUpdate(client: Client) {
+        setInterval(() => this.updateStats(client), 5000);
+    }
 }
 
 export interface RawCluster {
@@ -98,4 +127,11 @@ export interface RawCluster {
     shardCount: number
     firstShardID: number;
     lastShardID: number;
+}
+
+export interface ShardStats {
+    id: number;
+    ready: boolean;
+    latency: number;
+    status: Shard["status"]
 }
