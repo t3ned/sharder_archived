@@ -17,8 +17,13 @@ export class Cluster {
     }
 
     public spawn() {
-        // TODO - uncaughtException
-        // TODO - unhandledRejection
+        process.on("uncaughtException", (error) => {
+           this.manager.logger.error(`Cluster ${this.id}`, error);
+        });
+
+        process.on("unhandledRejection", (reason) => {
+            this.manager.logger.error(`Cluster ${this.id}`, JSON.stringify(reason));
+        });
 
         process.on("message", message => {
             if (!message.name) return;
