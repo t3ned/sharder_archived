@@ -2,7 +2,7 @@ import { Client, ClientOptions } from "eris";
 import { Cluster, RawCluster } from "./Cluster";
 
 import { EventEmitter } from "events";
-import { isMaster, setupMaster, fork, workers } from "cluster";
+import { isMaster, setupMaster, fork, workers, on } from "cluster";
 import { cpus } from "os";
 
 import { ShardQueue } from "../util/ShardQueue";
@@ -84,6 +84,17 @@ export class ClusterManager extends EventEmitter {
         }
 
         // TODO - Listen for process messages
+        on("message", (_worker, message) => {
+           if (!message.name) return;
+
+           switch (message.name) {
+               case "shardsStarted":
+                   this.queue.next();
+                   // TODO - clusterTimeout options
+                   if (this.queue.length) setTimeout(() => this.queue.execute(), 5000);
+                   break;
+           }
+        });
 
         this.queue.on("execute", (item) => {
             const cluster = this.clusters.get(item.item);
@@ -102,21 +113,21 @@ export class ClusterManager extends EventEmitter {
     private startCluster(clusterID: number) {
         if (clusterID === this.clusterCount) return this.connectShards();
 
-        // Start next cluster
+        // Fork a worker
         const worker = fork();
 
         // Cache this worker
         this.workers.set(worker.id, clusterID);
         this.clusters.set(clusterID, {
             workerID: worker.id,
-            shardCount: this.shardCount as number,
+            shardCount: 0,
             firstShardID: 0,
             lastShardID: 0
         });
 
         this.logger.info("Cluster Manager", `Started cluster ${clusterID}`);
 
-        // Start other clusters
+        // Start next cluster
         this.startCluster(++clusterID);
     }
 
@@ -136,17 +147,15 @@ export class ClusterManager extends EventEmitter {
             this.queue.enqueue({
                 item: clusterID,
                 value: {
-                    id: clusterID,
+                    clusterID,
                     name: "connect",
                     token: this.token,
-                    clientBase: this.clientBase,
                     clusterCount: this.clusterCount as number,
-                    shardCount: this.shardCount as number,
+                    shardCount: cluster.shardCount,
                     firstShardID: cluster.firstShardID,
-                    lastShardID: cluster.lastShardID,
-                    clientOptions: this.clientOptions
+                    lastShardID: cluster.lastShardID
                 }
-            })
+            });
         }
 
         this.logger.info("Cluster Manager", "All shards spread");
@@ -188,7 +197,8 @@ export class ClusterManager extends EventEmitter {
                 clusterID,
                 Object.assign(cluster, {
                     firstShardID: Math.min(...chunk),
-                    lastShardID: Math.max(...chunk)
+                    lastShardID: Math.max(...chunk),
+                    shardCount: chunk.length
                 })
             );
         }

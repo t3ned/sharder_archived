@@ -1,5 +1,4 @@
 import { EventEmitter } from "events";
-import { Client, ClientOptions } from "eris";
 
 export class ShardQueue extends EventEmitter {
     public items: QueueItem[] = [];
@@ -15,7 +14,7 @@ export class ShardQueue extends EventEmitter {
         if (!length) this.execute();
     }
 
-    public dequeue() {
+    public next() {
         this.items.shift()
     }
 
@@ -34,13 +33,11 @@ export interface QueueItem {
 }
 
 export interface QueueItemValue {
-    id: number,
+    clusterID: number,
     name: "connect",
     token: string,
-    clientBase: typeof Client,
     clusterCount: number,
     shardCount: number,
     firstShardID: number,
-    lastShardID: number,
-    clientOptions: ClientOptions
+    lastShardID: number
 }

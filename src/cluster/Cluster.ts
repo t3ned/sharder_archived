@@ -64,7 +64,8 @@ export class Cluster {
         });
 
         client.on("ready", () => {
-           logger.debug(loggerSource, `Shards ${this.firstShardID} - ${this.lastShardID} are ready`)
+           logger.debug(loggerSource, `Shards ${this.firstShardID} - ${this.lastShardID} are ready`);
+           process.send!({ name: "shardsStarted" });
         });
 
         client.on("shardDisconnect", (error, id) => {
