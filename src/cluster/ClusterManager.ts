@@ -62,8 +62,6 @@ export class ClusterManager extends EventEmitter {
      */
     public launchClusters() {
         if (isMaster) {
-            // TODO - Print ascii art name
-
             process.on("uncaughtException", (error) => {
                 this.logger.error("Cluster Manager", error.stack ?? error.message);
             });
