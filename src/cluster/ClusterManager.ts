@@ -60,13 +60,14 @@ export class ClusterManager extends EventEmitter {
 
         this.stats = {
             shards: 0,
-            clusters: 0,
+            clustersLaunched: 0,
             guilds: 0,
             users: 0,
             channels: 0,
             latency: 0,
             ramUsage: 0,
             voiceConnections: 0,
+            clusters: []
         }
 
         this.launchClusters();
@@ -107,6 +108,24 @@ export class ClusterManager extends EventEmitter {
                    this.queue.next();
                    if (this.queue.length) setTimeout(() => this.queue.execute(), this.clusterTimeout);
                    break;
+               case "statsUpdate": {
+                   const {
+                       guilds, users, voiceConnections,
+                       shards, channels, ramUsage
+                   } = message.stats;
+
+                   this.stats.guilds += guilds;
+                   this.stats.users += users;
+                   this.stats.shards += shards;
+                   this.stats.channels += channels;
+                   this.stats.ramUsage += ramUsage;
+                   this.stats.voiceConnections += voiceConnections;
+                   this.stats.clustersLaunched++;
+                   this.stats.clusters.push(message.stats);
+
+                   if (this.stats.clustersLaunched === this.clusters.size)
+                       this.emit("stats", this.stats);
+               }
            }
         });
 
@@ -123,7 +142,7 @@ export class ClusterManager extends EventEmitter {
         const worker = clusters[start];
 
         if (worker) {
-            worker.send({ name: "updateStats" });
+            worker.send({ name: "statsUpdate" });
             this.updateStats(clusters, ++start);
         }
     }
@@ -131,6 +150,18 @@ export class ClusterManager extends EventEmitter {
     private startStatsUpdate() {
         if (!this.statsUpdateInterval) return;
         setInterval(() => {
+            this.stats = {
+                shards: 0,
+                clustersLaunched: 0,
+                guilds: 0,
+                users: 0,
+                channels: 0,
+                latency: 0,
+                ramUsage: 0,
+                voiceConnections: 0,
+                clusters: []
+            }
+
             const clusters = Object.values(workers).filter(Boolean) as Worker[];
             this.updateStats(clusters, 0);
         }, this.statsUpdateInterval);
@@ -280,7 +311,8 @@ export class ClusterManager extends EventEmitter {
 }
 
 export interface ClusterManager {
-
+    on(event: "stats", listener: (stats: ClusterManagerStats) => void): this;
+    once(event: "stats", listener: (stats: ClusterManagerStats) => void): this;
 }
 
 export interface ClusterManagerOptions {
@@ -302,7 +334,8 @@ export interface ClusterManagerOptions {
 
 export interface ClusterManagerStats {
     shards: number;
-    clusters: number;
+    clusters: unknown[]; // TODO - add types for this
+    clustersLaunched: number,
     guilds: number;
     users: number;
     channels: number;

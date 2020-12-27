@@ -42,6 +42,23 @@ export class Cluster {
                     this.shardCount = message.shardCount;
                     if (this.shardCount > 0) this.connect();
                     break;
+                case "statsUpdate":
+                    process.send!({
+                        name: "statsUpdate",
+                        stats: {
+                            id: this.id,
+                            shards: this.shardCount,
+                            guilds: this.guilds,
+                            users: this.users,
+                            channels: 0,
+                            ramUsage: process.memoryUsage().rss / 1000000,
+                            uptime: this.uptime,
+                            latency: 0,
+                            shardStats: this.shardStats,
+                            voiceConnections: this.voiceConnections
+                        }
+                    });
+                    break;
             }
         });
     }
@@ -103,7 +120,6 @@ export class Cluster {
     public updateStats(client: Client) {
         const { guilds, users, uptime,
             voiceConnections, shards } = client;
-
         this.guilds = guilds.size;
         this.users = users.size;
         this.uptime = uptime;
