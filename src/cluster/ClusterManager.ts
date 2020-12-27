@@ -29,6 +29,7 @@ export class ClusterManager extends EventEmitter {
     public workers = new Map<number, number>();
 
     public logger: Logger;
+    public statsUpdateInterval: number;
 
     public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
         super();
@@ -263,4 +264,6 @@ export interface ClusterManagerOptions {
     clusterCount: number | "auto";
     clusterTimeout: number;
     shardsPerCluster: number;
+
+    statsUpdateInterval: number;
 }
