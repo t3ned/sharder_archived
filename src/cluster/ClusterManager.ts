@@ -64,7 +64,6 @@ export class ClusterManager extends EventEmitter {
             guilds: 0,
             users: 0,
             channels: 0,
-            latency: 0,
             ramUsage: 0,
             voiceConnections: 0,
             clusters: []
@@ -159,7 +158,6 @@ export class ClusterManager extends EventEmitter {
                 guilds: 0,
                 users: 0,
                 channels: 0,
-                latency: 0,
                 ramUsage: 0,
                 voiceConnections: 0,
                 clusters: []
@@ -342,7 +340,6 @@ export interface ClusterManagerStats {
     guilds: number;
     users: number;
     channels: number;
-    latency: number;
     ramUsage: number;
     voiceConnections: number;
 }
