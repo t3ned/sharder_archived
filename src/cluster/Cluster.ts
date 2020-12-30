@@ -83,7 +83,7 @@ export class Cluster {
 
         // Initialise the client
         const client = new clientBase(token, clientOptions);
-        this.client = client;
+        Object.defineProperty(this, "client", { value: client });
 
         this.startStatsUpdate(client);
 
