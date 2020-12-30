@@ -6,6 +6,7 @@ import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
 import { cpus } from "os";
 
 import { ShardQueue } from "../util/ShardQueue";
+import { defaultClusterStats } from "../util/Constants"
 import { Logger, LoggerOptions } from "@nedbot/logger";
 
 export class ClusterManager extends EventEmitter {
@@ -58,17 +59,7 @@ export class ClusterManager extends EventEmitter {
             enableInfoLogs: false
         });
 
-        this.stats = {
-            shards: 0,
-            clustersLaunched: 0,
-            guilds: 0,
-            users: 0,
-            channels: 0,
-            ramUsage: 0,
-            voiceConnections: 0,
-            clusters: []
-        }
-
+        this.stats = defaultClusterStats;
         this.launchClusters();
     }
 
@@ -152,17 +143,7 @@ export class ClusterManager extends EventEmitter {
     private startStatsUpdate() {
         if (!this.statsUpdateInterval) return;
         setInterval(() => {
-            this.stats = {
-                shards: 0,
-                clustersLaunched: 0,
-                guilds: 0,
-                users: 0,
-                channels: 0,
-                ramUsage: 0,
-                voiceConnections: 0,
-                clusters: []
-            }
-
+            this.stats = defaultClusterStats;
             const clusters = Object.values(workers).filter(Boolean) as Worker[];
             this.updateStats(clusters, 0);
         }, this.statsUpdateInterval);
