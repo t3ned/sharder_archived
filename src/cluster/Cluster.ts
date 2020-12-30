@@ -14,6 +14,7 @@ export class Cluster {
 
     public guilds = 0;
     public users = 0;
+    public channels = 0;
     public uptime = 0;
     public voiceConnections = 0;
     public shardStats: ShardStats[] = [];
@@ -51,7 +52,7 @@ export class Cluster {
                             shards: this.shardCount,
                             guilds: this.guilds,
                             users: this.users,
-                            channels: 0,
+                            channels: this.channels,
                             ramUsage: process.memoryUsage().rss / 1000000,
                             uptime: this.uptime,
                             latency: 0,
@@ -120,9 +121,10 @@ export class Cluster {
 
     public updateStats(client: Client) {
         const { guilds, users, uptime,
-            voiceConnections, shards } = client;
+            voiceConnections, shards, channelGuildMap } = client;
         this.guilds = guilds.size;
         this.users = users.size;
+        this.channels = Object.keys(channelGuildMap).length;
         this.uptime = uptime;
         this.voiceConnections = voiceConnections.size;
 
