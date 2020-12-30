@@ -100,8 +100,10 @@ export class ClusterManager extends EventEmitter {
         }
 
         // TODO - Listen for process messages
-        on("message", (_worker, message) => {
+        on("message", (worker, message) => {
            if (!message.name) return;
+
+           const clusterID = this.workers.get(worker.id)!;
 
            switch (message.name) {
                case "shardsStarted":
@@ -114,6 +116,7 @@ export class ClusterManager extends EventEmitter {
                        shards, channels, ramUsage
                    } = message.stats;
 
+                   message.stats.id = clusterID;
                    this.stats.ramUsage += ramUsage;
                    this.stats.guilds += guilds;
                    this.stats.users += users;
