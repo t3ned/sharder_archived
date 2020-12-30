@@ -146,6 +146,19 @@ export interface RawCluster {
     lastShardID: number;
 }
 
+export interface ClusterStats {
+    id: number;
+    shards: number;
+    guilds: number;
+    users: number;
+    channels: number;
+    ramUsage: number;
+    uptime: number;
+    latency: number;
+    shardStats: ShardStats[],
+    voiceConnections: number;
+}
+
 export interface ShardStats {
     id: number;
     ready: boolean;

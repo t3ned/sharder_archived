@@ -1,5 +1,5 @@
 import { Client, ClientOptions } from "eris";
-import { Cluster, RawCluster } from "./Cluster";
+import { Cluster, ClusterStats, RawCluster } from "./Cluster";
 
 import { EventEmitter } from "events";
 import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
@@ -337,7 +337,7 @@ export interface ClusterManagerOptions {
 
 export interface ClusterManagerStats {
     shards: number;
-    clusters: unknown[]; // TODO - add types for this
+    clusters: ClusterStats[]; // TODO - add types for this
     clustersLaunched: number,
     guilds: number;
     users: number;
