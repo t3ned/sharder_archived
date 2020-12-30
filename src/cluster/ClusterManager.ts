@@ -334,7 +334,7 @@ export interface ClusterManagerOptions {
 
 export interface ClusterManagerStats {
     shards: number;
-    clusters: ClusterStats[]; // TODO - add types for this
+    clusters: ClusterStats[];
     clustersLaunched: number,
     guilds: number;
     users: number;
