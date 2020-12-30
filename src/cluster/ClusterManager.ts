@@ -1,8 +1,8 @@
 import { Client, ClientOptions } from "eris";
-import { Cluster, RawCluster } from "./Cluster";
+import { Cluster, ClusterStats, RawCluster } from "./Cluster";
 
 import { EventEmitter } from "events";
-import { isMaster, setupMaster, fork, workers } from "cluster";
+import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
 import { cpus } from "os";
 
 import { ShardQueue } from "../util/ShardQueue";
@@ -22,12 +22,15 @@ export class ClusterManager extends EventEmitter {
     public guildsPerShard: number;
 
     public clusterCount: number | "auto";
+    public clusterTimeout: number;
     public shardsPerCluster: number;
 
     public clusters = new Map<number, RawCluster>();
     public workers = new Map<number, number>();
 
     public logger: Logger;
+    public statsUpdateInterval: number;
+    public stats: ClusterManagerStats;
 
     public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
         super();
@@ -44,13 +47,27 @@ export class ClusterManager extends EventEmitter {
         this.lastShardID = options.lastShardID ?? 0;
         this.guildsPerShard = options.guildsPerShard ?? 1000;
 
-        this.clusterCount = options.clusterCount ?? "auto";
+        this.clusterCount = options.clusterCount || "auto";
+        this.clusterTimeout = options.clusterTimeout ?? 5000;
         this.shardsPerCluster = options.shardsPerCluster ?? 0;
+
+        this.statsUpdateInterval = options.statsUpdateInterval ?? 0;
 
         this.logger = new Logger(options.loggerOptions ?? {
             enableErrorLogs: false,
             enableInfoLogs: false
         });
+
+        this.stats = {
+            shards: 0,
+            clustersLaunched: 0,
+            guilds: 0,
+            users: 0,
+            channels: 0,
+            ramUsage: 0,
+            voiceConnections: 0,
+            clusters: []
+        };
 
         this.launchClusters();
     }
@@ -60,8 +77,6 @@ export class ClusterManager extends EventEmitter {
      */
     public launchClusters() {
         if (isMaster) {
-            // TODO - Print ascii art name
-
             process.on("uncaughtException", (error) => {
                 this.logger.error("Cluster Manager", error.stack ?? error.message);
             });
@@ -84,14 +99,72 @@ export class ClusterManager extends EventEmitter {
         }
 
         // TODO - Listen for process messages
+        on("message", (worker, message) => {
+           if (!message.name) return;
+
+           const clusterID = this.workers.get(worker.id)!;
+
+           switch (message.name) {
+               case "shardsStarted":
+                   this.queue.next();
+                   if (this.queue.length) setTimeout(() => this.queue.execute(), this.clusterTimeout);
+                   break;
+               case "statsUpdate": {
+                   const {
+                       guilds, users, voiceConnections,
+                       shards, channels, ramUsage
+                   } = message.stats;
+
+                   message.stats.id = clusterID;
+                   this.stats.ramUsage += ramUsage;
+                   this.stats.guilds += guilds;
+                   this.stats.users += users;
+                   this.stats.shards += shards;
+                   this.stats.channels += channels;
+                   this.stats.voiceConnections += voiceConnections;
+                   this.stats.clusters.push(message.stats);
+                   this.stats.clustersLaunched++;
+
+                   if (this.stats.clustersLaunched === this.clusters.size)
+                       this.emit("stats", this.stats);
+               }
+           }
+        });
 
         this.queue.on("execute", (item) => {
-            const cluster = this.clusters.get(item.item);
+            const cluster = this.clusters.get(item.clusterID);
             if (cluster) {
                 const worker = workers[cluster.workerID]!;
-                worker.send(item.value);
+                worker.send(item);
             }
         });
+    }
+
+    public updateStats(clusters: Worker[], start: number) {
+        const worker = clusters[start];
+
+        if (worker) {
+            worker.send({ name: "statsUpdate" });
+            this.updateStats(clusters, ++start);
+        }
+    }
+
+    private startStatsUpdate() {
+        if (!this.statsUpdateInterval) return;
+        setInterval(() => {
+            this.stats = {
+                shards: 0,
+                clustersLaunched: 0,
+                guilds: 0,
+                users: 0,
+                channels: 0,
+                ramUsage: 0,
+                voiceConnections: 0,
+                clusters: []
+            };
+            const clusters = Object.values(workers).filter(Boolean) as Worker[];
+            this.updateStats(clusters, 0);
+        }, this.statsUpdateInterval);
     }
 
     /**
@@ -102,21 +175,21 @@ export class ClusterManager extends EventEmitter {
     private startCluster(clusterID: number) {
         if (clusterID === this.clusterCount) return this.connectShards();
 
-        // Spawn a cluster worker
+        // Fork a worker
         const worker = fork();
 
         // Cache this worker
         this.workers.set(worker.id, clusterID);
         this.clusters.set(clusterID, {
             workerID: worker.id,
-            shardCount: this.shardCount as number,
+            shardCount: 0,
             firstShardID: 0,
             lastShardID: 0
         });
 
         this.logger.info("Cluster Manager", `Started cluster ${clusterID}`);
 
-        // Start other clusters
+        // Start next cluster
         this.startCluster(++clusterID);
     }
 
@@ -127,29 +200,25 @@ export class ClusterManager extends EventEmitter {
     private connectShards() {
         this.logger.info("Cluster Manager", "Started all clusters, connecting shards...");
 
-        const chunkedShards = this.chunkShards();
+        this.chunkShards();
 
         // Queue each cluster for connection
-        for (let clusterID = 0; clusterID < chunkedShards.length; clusterID++) {
+        for (let clusterID = 0; clusterID < this.clusterCount; clusterID++) {
             const cluster = this.clusters.get(clusterID)!;
 
             this.queue.enqueue({
-                item: clusterID,
-                value: {
-                    id: clusterID,
-                    name: "connect",
-                    token: this.token,
-                    clientBase: this.clientBase,
-                    clusterCount: this.clusterCount as number,
-                    shardCount: this.shardCount as number,
-                    firstShardID: cluster.firstShardID,
-                    lastShardID: cluster.lastShardID,
-                    clientOptions: this.clientOptions
-                }
-            })
+                clusterID,
+                name: "connect",
+                token: this.token,
+                clusterCount: this.clusterCount as number,
+                shardCount: cluster.shardCount,
+                firstShardID: cluster.firstShardID,
+                lastShardID: cluster.lastShardID
+            });
         }
 
         this.logger.info("Cluster Manager", "All shards spread");
+        this.startStatsUpdate();
     }
 
     /**
@@ -188,7 +257,8 @@ export class ClusterManager extends EventEmitter {
                 clusterID,
                 Object.assign(cluster, {
                     firstShardID: Math.min(...chunk),
-                    lastShardID: Math.max(...chunk)
+                    lastShardID: Math.max(...chunk),
+                    shardCount: chunk.length
                 })
             );
         }
@@ -225,9 +295,14 @@ export class ClusterManager extends EventEmitter {
         const { clusterCount, shardsPerCluster, shardCount } = this;
 
         // Provided clusterCount is valid
-        if (typeof clusterCount === "number") return clusterCount;
+        if (typeof clusterCount === "number") {
+            if (shardsPerCluster && clusterCount * shardsPerCluster < shardCount)
+                throw new TypeError(`Invalid \`shardsPerCluster\` provided. \`shardCount\` should be >= \`clusterCount\` * \`shardsPerCluster\``);
+            return clusterCount;
+        }
+
         // Use the count of cpus to determine cluster count
-        if (!shardsPerCluster) return cpus().length;
+        if (shardsPerCluster === 0) return cpus().length;
 
         // Calculate the total clusters with the configured options
         const clusterCountDecimal = (shardCount as number) / shardsPerCluster;
@@ -236,7 +311,8 @@ export class ClusterManager extends EventEmitter {
 }
 
 export interface ClusterManager {
-
+    on(event: "stats", listener: (stats: ClusterManagerStats) => void): this;
+    once(event: "stats", listener: (stats: ClusterManagerStats) => void): this;
 }
 
 export interface ClusterManagerOptions {
@@ -250,5 +326,19 @@ export interface ClusterManagerOptions {
     guildsPerShard: number;
 
     clusterCount: number | "auto";
+    clusterTimeout: number;
     shardsPerCluster: number;
+
+    statsUpdateInterval: number;
+}
+
+export interface ClusterManagerStats {
+    shards: number;
+    clusters: ClusterStats[]; // TODO - add types for this
+    clustersLaunched: number,
+    guilds: number;
+    users: number;
+    channels: number;
+    ramUsage: number;
+    voiceConnections: number;
 }
