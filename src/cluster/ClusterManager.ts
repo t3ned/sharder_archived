@@ -111,20 +111,17 @@ export class ClusterManager extends EventEmitter {
                case "statsUpdate": {
                    const {
                        guilds, users, voiceConnections,
-                       shards, channels, ramUsage, id
+                       shards, channels, ramUsage
                    } = message.stats;
 
                    this.stats.ramUsage += ramUsage;
-
-                   if (id !== -1) {
-                       this.stats.guilds += guilds;
-                       this.stats.users += users;
-                       this.stats.shards += shards;
-                       this.stats.channels += channels;
-                       this.stats.voiceConnections += voiceConnections;
-                       this.stats.clusters.push(message.stats);
-                       this.stats.clustersLaunched++;
-                   }
+                   this.stats.guilds += guilds;
+                   this.stats.users += users;
+                   this.stats.shards += shards;
+                   this.stats.channels += channels;
+                   this.stats.voiceConnections += voiceConnections;
+                   this.stats.clusters.push(message.stats);
+                   this.stats.clustersLaunched++;
 
                    if (this.stats.clustersLaunched === this.clusters.size)
                        this.emit("stats", this.stats);
