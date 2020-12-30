@@ -55,7 +55,7 @@ export class Cluster {
                             channels: this.channels,
                             ramUsage: process.memoryUsage().rss / 1000000,
                             uptime: this.uptime,
-                            latency: 0,
+                            latency: this.latency,
                             shardStats: this.shardStats,
                             voiceConnections: this.voiceConnections
                         }
@@ -134,6 +134,10 @@ export class Cluster {
             latency: shard.latency,
             status: shard.status
         }));
+    }
+
+    public get latency() {
+        return this.shardStats.reduce((a, b) => a + b.latency , 0) / this.shardCount;
     }
 
     private startStatsUpdate(client: Client) {
