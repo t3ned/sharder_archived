@@ -1,9 +1,11 @@
 import { Client, Shard } from "eris";
 import { ClusterManager } from "./ClusterManager";
+import { IPC } from "../struct/IPC";
 
 export class Cluster {
     public client: Client;
     public manager: ClusterManager;
+    public ipc = new IPC()
 
     public id = -1;
 
