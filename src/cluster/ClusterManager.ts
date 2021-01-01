@@ -27,6 +27,7 @@ export class ClusterManager extends EventEmitter {
 
     public clusters = new Map<number, RawCluster>();
     public workers = new Map<number, number>();
+    public callbacks = new Map<string, number>();
 
     public logger: Logger;
     public statsUpdateInterval: number;
@@ -127,7 +128,31 @@ export class ClusterManager extends EventEmitter {
 
                    if (this.stats.clustersLaunched === this.clusters.size)
                        this.emit("stats", this.stats);
+                   break;
                }
+               case "fetchGuild":
+               case "fetchChannel":
+               case "fetchUser":
+                   this.fetchInfo(0, message.name, message.id);
+                   this.callbacks.set(message.id, clusterID);
+                   break;
+               case "fetchMember":
+                   this.fetchInfo(0, message.name, [message.guildID, message.id]);
+                   this.callbacks.set(message.id, clusterID);
+                   break;
+               case "fetchReturn":
+                   const callback = this.callbacks.get(message.value.id)!;
+                   const cluster = this.clusters.get(callback);
+
+                   if (cluster) {
+                       workers[cluster.workerID]!.send({
+                           name: "fetchReturn",
+                           id: message.value.id,
+                           value: message.value
+                       });
+
+                       this.callbacks.delete(message.value.id);
+                   }
            }
         });
 
@@ -138,6 +163,16 @@ export class ClusterManager extends EventEmitter {
                 worker.send(item);
             }
         });
+    }
+
+    public fetchInfo(start: number, name: string, value: string | string[]) {
+        const cluster = this.clusters.get(start);
+
+        if (cluster) {
+            const worker = workers[cluster.workerID]!;
+            worker.send({ name, value });
+            this.fetchInfo(start + 1, name, value);
+        }
     }
 
     public updateStats(clusters: Worker[], start: number) {

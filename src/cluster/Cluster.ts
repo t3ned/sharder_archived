@@ -34,7 +34,7 @@ export class Cluster {
             this.manager.logger.error(`Cluster ${this.id}`, JSON.stringify(reason));
         });
 
-        process.on("message", message => {
+        process.on("message", async message => {
             if (!message.name) return;
 
             switch (message.name) {
@@ -62,6 +62,43 @@ export class Cluster {
                             voiceConnections: this.voiceConnections
                         }
                     });
+                    break;
+                case "fetchGuild": {
+                    if (!this.client) return;
+
+                    const id = message.value;
+                    const value = this.client.guilds.get(id);
+                    if (value) process.send!({name: "fetchReturn", value: value.toJSON()});
+                    break;
+                }
+                case "fetchChannel": {
+                    if (!this.client) return;
+
+                    const id = message.value;
+                    const value = this.client.getChannel(id);
+                    if (value) process.send!({ name: "fetchReturn", value: value.toJSON() });
+                    break;
+                }
+                case "fetchUser": {
+                    if (!this.client) return;
+
+                    const id = message.value;
+                    const value = this.client.users.get(id);
+                    if (value) process.send!({ name: "fetchReturn", value: value.toJSON() });
+                    break;
+                }
+                case "fetchMember": {
+                    if (!this.client) return;
+
+                    const [guildID, id] = message.value;
+                    const guild = this.client.guilds.get(guildID);
+                    const value = guild?.members.get(id);
+
+                    if (value) process.send!({ name: "fetchReturn", value: value.toJSON() });
+                    break;
+                }
+                case "fetchReturn":
+                    this.ipc.emit(message.id, message.value);
                     break;
             }
         });
@@ -97,9 +134,10 @@ export class Cluster {
             logger.debug(loggerSource, `Shard ${id} is ready`);
         });
 
-        client.on("ready", () => {
+        client.on("ready", async () => {
            logger.debug(loggerSource, `Shards ${this.firstShardID} - ${this.lastShardID} are ready`);
            process.send!({ name: "shardsStarted" });
+           console.log(await this.ipc.fetchMember("670768213113569301","699346962507497504"));
         });
 
         client.on("shardDisconnect", (error, id) => {
