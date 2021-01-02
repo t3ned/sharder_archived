@@ -158,6 +158,9 @@ export class ClusterManager extends EventEmitter {
                case "broadcast":
                    this.broadcast(0, message.message);
                    break;
+               case "send":
+                   this.sendTo(message.clusterID, message.message);
+                   break;
            }
         });
 
@@ -197,6 +200,12 @@ export class ClusterManager extends EventEmitter {
             worker.send(message);
             this.broadcast(++start, message);
         }
+    }
+
+    public sendTo(clusterID: number, message: Partial<Message>) {
+        const cluster = this.clusters.get(clusterID)!;
+        const worker = workers[cluster.workerID];
+        if (worker) worker.send(message);
     }
 
     private startStatsUpdate() {
