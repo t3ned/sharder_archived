@@ -7,6 +7,7 @@ import { cpus } from "os";
 
 import { ShardQueue } from "../util/ShardQueue";
 import { Logger, LoggerOptions } from "@nedbot/logger";
+import {Message} from "../struct/IPC";
 
 export class ClusterManager extends EventEmitter {
     public queue = new ShardQueue();
@@ -153,6 +154,10 @@ export class ClusterManager extends EventEmitter {
 
                        this.callbacks.delete(message.value.id);
                    }
+                   break;
+               case "broadcast":
+                   this.broadcast(0, message.message);
+                   break;
            }
         });
 
@@ -181,6 +186,16 @@ export class ClusterManager extends EventEmitter {
         if (worker) {
             worker.send({ name: "statsUpdate" });
             this.updateStats(clusters, ++start);
+        }
+    }
+
+    public broadcast(start: number, message: Partial<Message>) {
+        const cluster = this.clusters.get(start);
+
+        if (cluster) {
+            const worker = workers[cluster.workerID]!;
+            worker.send(message);
+            this.broadcast(++start, message);
         }
     }
 
