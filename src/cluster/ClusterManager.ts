@@ -5,7 +5,7 @@ import { EventEmitter } from "events";
 import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
 import { cpus } from "os";
 
-import { ShardQueue } from "../util/ShardQueue";
+import { ShardQueue } from "../struct/ShardQueue";
 import { Logger, LoggerOptions } from "@nedbot/logger";
 import {Message} from "../struct/IPC";
 
