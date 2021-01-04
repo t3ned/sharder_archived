@@ -5,7 +5,7 @@ export class IPC extends EventEmitter {
     public events = new Map<string, { callback: Callback }>();
     public timeout: number;
 
-    public constructor(timeout= 1000) {
+    public constructor(timeout= 5000) {
         super();
 
         this.timeout = timeout;
