@@ -5,7 +5,7 @@ export class IPC extends EventEmitter {
     public events = new Map<string, { callback: Callback }>();
     public timeout: number;
 
-    public constructor(timeout= 5000) {
+    public constructor(timeout= 1000) {
         super();
 
         this.timeout = timeout;
@@ -96,15 +96,15 @@ export class IPC extends EventEmitter {
      * @param id The id of the fetch
      * @private
      */
-    private onFetch<T>(id: string): Promise<T | null> {
+    private onFetch<T>(id: string): Promise<T | undefined> {
         return new Promise((resolve) => {
-            const callback = (data: T | null) => {
+            const callback = (data: T | undefined) => {
               this.off(id, callback);
               resolve(data);
             };
 
             this.on(id, callback);
-            setTimeout(() => callback(null), this.timeout);
+            setTimeout(() => callback(undefined), this.timeout);
         });
     }
 }

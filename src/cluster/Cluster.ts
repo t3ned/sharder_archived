@@ -142,6 +142,7 @@ export class Cluster {
         client.on("ready", async () => {
            logger.debug(loggerSource, `Shards ${this.firstShardID} - ${this.lastShardID} are ready`);
            process.send!({ name: "shardsStarted" });
+           console.log(await this.ipc.fetchGuild("wdawd"))
         });
 
         client.on("shardDisconnect", (error, id) => {
