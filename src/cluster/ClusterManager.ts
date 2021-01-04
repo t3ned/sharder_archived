@@ -7,7 +7,7 @@ import { cpus } from "os";
 
 import { ShardQueue } from "../struct/ShardQueue";
 import { Logger, LoggerOptions } from "@nedbot/logger";
-import {Message} from "../struct/IPC";
+import {APIRequestError, Message} from "../struct/IPC";
 
 export class ClusterManager extends EventEmitter {
     public queue = new ShardQueue();
@@ -101,7 +101,7 @@ export class ClusterManager extends EventEmitter {
         }
 
         // TODO - Listen for process messages
-        on("message", (worker, message) => {
+        on("message", async (worker, message) => {
            if (!message.name) return;
 
            const clusterID = this.workers.get(worker.id)!;
@@ -160,6 +160,27 @@ export class ClusterManager extends EventEmitter {
                    break;
                case "send":
                    this.sendTo(message.clusterID, message.message);
+                   break;
+               case "apiRequest":
+                   const { method, url, auth, body, file, route, short } = message;
+
+                   try {
+                       const data = await this.client.requestHandler.request(
+                           method, url, auth,
+                           body, file, route,
+                           short
+                       );
+
+                       this.sendTo(clusterID, { eventName: `apiRequest.${message.requestID}`, data });
+                   } catch (e) {
+                       const error: APIRequestError = {
+                           code: e.code,
+                           message: e.message,
+                           stack: e.stack
+                       };
+
+                       this.sendTo(clusterID, { eventName: `apiResponse.${message.requestID}`, error });
+                   }
                    break;
            }
         });

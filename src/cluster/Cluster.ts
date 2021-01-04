@@ -1,6 +1,7 @@
 import { Client, Shard } from "eris";
 import { ClusterManager } from "./ClusterManager";
 import { IPC } from "../struct/IPC";
+import { SyncedRequestHandler } from "../struct/RequestHandler";
 
 export class Cluster {
     public client: Client;
@@ -123,6 +124,10 @@ export class Cluster {
         // Initialise the client
         const client = new clientBase(token, clientOptions);
         Object.defineProperty(this, "client", { value: client });
+
+        this.client.requestHandler = new SyncedRequestHandler(client, this.ipc, {
+            timeout: this.client.options.requestTimeout ?? 20000
+        });
 
         this.startStatsUpdate(client);
 

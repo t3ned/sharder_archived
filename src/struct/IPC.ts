@@ -113,4 +113,12 @@ export type Callback = (data: Message) => void;
 
 export interface Message {
     eventName: string;
+    error: APIRequestError;
+    data: any;
+}
+
+export interface APIRequestError {
+    code: number;
+    message: string;
+    stack: string;
 }
