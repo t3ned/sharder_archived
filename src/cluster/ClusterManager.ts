@@ -5,8 +5,9 @@ import { EventEmitter } from "events";
 import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
 import { cpus } from "os";
 
-import { ShardQueue } from "../util/ShardQueue";
+import { ShardQueue } from "../struct/ShardQueue";
 import { Logger, LoggerOptions } from "@nedbot/logger";
+import {APIRequestError, Message} from "../struct/IPC";
 
 export class ClusterManager extends EventEmitter {
     public queue = new ShardQueue();
@@ -27,6 +28,7 @@ export class ClusterManager extends EventEmitter {
 
     public clusters = new Map<number, RawCluster>();
     public workers = new Map<number, number>();
+    public callbacks = new Map<string, number>();
 
     public logger: Logger;
     public statsUpdateInterval: number;
@@ -99,7 +101,7 @@ export class ClusterManager extends EventEmitter {
         }
 
         // TODO - Listen for process messages
-        on("message", (worker, message) => {
+        on("message", async (worker, message) => {
            if (!message.name) return;
 
            const clusterID = this.workers.get(worker.id)!;
@@ -127,7 +129,59 @@ export class ClusterManager extends EventEmitter {
 
                    if (this.stats.clustersLaunched === this.clusters.size)
                        this.emit("stats", this.stats);
+                   break;
                }
+               case "fetchGuild":
+               case "fetchChannel":
+               case "fetchUser":
+                   this.fetchInfo(0, message.name, message.id);
+                   this.callbacks.set(message.id, clusterID);
+                   break;
+               case "fetchMember":
+                   this.fetchInfo(0, message.name, [message.guildID, message.id]);
+                   this.callbacks.set(message.id, clusterID);
+                   break;
+               case "fetchReturn":
+                   const callback = this.callbacks.get(message.value.id)!;
+                   const cluster = this.clusters.get(callback);
+
+                   if (cluster) {
+                       workers[cluster.workerID]!.send({
+                           name: "fetchReturn",
+                           id: message.value.id,
+                           value: message.value
+                       });
+
+                       this.callbacks.delete(message.value.id);
+                   }
+                   break;
+               case "broadcast":
+                   this.broadcast(0, message.message);
+                   break;
+               case "send":
+                   this.sendTo(message.clusterID, message.message);
+                   break;
+               case "apiRequest":
+                   const { method, url, auth, body, file, route, short } = message;
+
+                   try {
+                       const data = await this.client.requestHandler.request(
+                           method, url, auth,
+                           body, file, route,
+                           short
+                       );
+
+                       this.sendTo(clusterID, { eventName: `apiRequest.${message.requestID}`, data });
+                   } catch (e) {
+                       const error: APIRequestError = {
+                           code: e.code,
+                           message: e.message,
+                           stack: e.stack
+                       };
+
+                       this.sendTo(clusterID, { eventName: `apiResponse.${message.requestID}`, error });
+                   }
+                   break;
            }
         });
 
@@ -140,6 +194,16 @@ export class ClusterManager extends EventEmitter {
         });
     }
 
+    public fetchInfo(start: number, name: string, value: string | string[]) {
+        const cluster = this.clusters.get(start);
+
+        if (cluster) {
+            const worker = workers[cluster.workerID]!;
+            worker.send({ name, value });
+            this.fetchInfo(start + 1, name, value);
+        }
+    }
+
     public updateStats(clusters: Worker[], start: number) {
         const worker = clusters[start];
 
@@ -147,6 +211,22 @@ export class ClusterManager extends EventEmitter {
             worker.send({ name: "statsUpdate" });
             this.updateStats(clusters, ++start);
         }
+    }
+
+    public broadcast(start: number, message: Partial<Message>) {
+        const cluster = this.clusters.get(start);
+
+        if (cluster) {
+            const worker = workers[cluster.workerID]!;
+            worker.send(message);
+            this.broadcast(++start, message);
+        }
+    }
+
+    public sendTo(clusterID: number, message: Partial<Message>) {
+        const cluster = this.clusters.get(clusterID)!;
+        const worker = workers[cluster.workerID];
+        if (worker) worker.send(message);
     }
 
     private startStatsUpdate() {
@@ -334,7 +414,7 @@ export interface ClusterManagerOptions {
 
 export interface ClusterManagerStats {
     shards: number;
-    clusters: ClusterStats[]; // TODO - add types for this
+    clusters: ClusterStats[];
     clustersLaunched: number,
     guilds: number;
     users: number;
