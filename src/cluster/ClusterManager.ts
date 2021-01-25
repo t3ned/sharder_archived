@@ -4,6 +4,8 @@ import { Cluster, ClusterStats, RawCluster } from "./Cluster";
 import { EventEmitter } from "events";
 import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
 import { cpus } from "os";
+import { readFileSync } from "fs";
+import { join } from "path" 
 
 import { ShardQueue } from "../struct/ShardQueue";
 import { Logger, LoggerOptions } from "@nedbot/logger";
@@ -16,6 +18,7 @@ export class ClusterManager extends EventEmitter {
     public client: Client;
 
     public token: string;
+    public printLogoPath: string;
 
     public shardCount: number | "auto";
     public firstShardID: number;
@@ -43,6 +46,7 @@ export class ClusterManager extends EventEmitter {
         Object.defineProperty(this, "clientOptions", { value: options.clientOptions ?? {} })
 
         this.clientBase = options.client ?? Client;
+        this.printLogoPath = options.printLogoPath ?? "";
 
         this.shardCount = options.shardCount ?? "auto";
         this.firstShardID = options.firstShardID ?? 0;
@@ -79,6 +83,8 @@ export class ClusterManager extends EventEmitter {
      */
     public launchClusters() {
         if (isMaster) {
+            this.printLogo();
+
             process.on("uncaughtException", (error) => {
                 this.logger.error("Cluster Manager", error.stack ?? error.message);
             });
@@ -192,6 +198,18 @@ export class ClusterManager extends EventEmitter {
                 worker.send(item);
             }
         });
+    }
+
+    private printLogo() {
+        const pathToFile = join(__dirname, "..", "..", this.printLogoPath);
+
+        try {
+            console.clear();
+            console.log(readFileSync(pathToFile, "utf-8"));
+        } catch (error) {
+            if (this.printLogoPath) 
+                this.logger.warn("General", `Failed to locate logo file: ${pathToFile}`);
+        }
     }
 
     public fetchInfo(start: number, name: string, value: string | string[]) {
@@ -410,6 +428,7 @@ export interface ClusterManagerOptions {
     shardsPerCluster: number;
 
     statsUpdateInterval: number;
+    printLogoPath: string; 
 }
 
 export interface ClusterManagerStats {
