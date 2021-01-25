@@ -19,6 +19,7 @@ export class ClusterManager extends EventEmitter {
 
     public token: string;
     public printLogoPath: string;
+    public launchModulePath: string;
 
     public shardCount: number | "auto";
     public firstShardID: number;
@@ -37,7 +38,7 @@ export class ClusterManager extends EventEmitter {
     public statsUpdateInterval: number;
     public stats: ClusterManagerStats;
 
-    public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
+    public constructor(token: string, launchModulePath: string, options: Partial<ClusterManagerOptions> = {}) {
         super();
 
         // Hide the token when the manager is logged
@@ -47,6 +48,7 @@ export class ClusterManager extends EventEmitter {
 
         this.clientBase = options.client ?? Client;
         this.printLogoPath = options.printLogoPath ?? "";
+        this.launchModulePath = launchModulePath;
 
         this.shardCount = options.shardCount ?? "auto";
         this.firstShardID = options.firstShardID ?? 0;
@@ -429,6 +431,7 @@ export interface ClusterManagerOptions {
 
     statsUpdateInterval: number;
     printLogoPath: string; 
+    launchModulePath: string;
 }
 
 export interface ClusterManagerStats {

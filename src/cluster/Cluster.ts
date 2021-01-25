@@ -2,6 +2,7 @@ import { Client, Shard } from "eris";
 import { ClusterManager } from "./ClusterManager";
 import { IPC } from "../struct/IPC";
 import { SyncedRequestHandler } from "../struct/RequestHandler";
+import { LaunchModule } from "../struct/LaunchModule";
 
 export class Cluster {
     public client: Client;
@@ -21,6 +22,8 @@ export class Cluster {
     public uptime = 0;
     public voiceConnections = 0;
     public shardStats: ShardStats[] = [];
+
+    public launchModule: LaunchModule | null = null;
 
     public constructor(manager: ClusterManager) {
         Object.defineProperty(this, "manager", { value: manager });
@@ -144,6 +147,10 @@ export class Cluster {
            process.send!({ name: "shardsStarted" });
         });
 
+        client.on("ready", () => {
+            this.loadLaunchModule(client);
+        });
+
         client.on("shardDisconnect", (error, id) => {
            logger.error(loggerSource, `Shard ${id} disconnected`, error);
         });
@@ -161,6 +168,20 @@ export class Cluster {
         });
 
         client.connect();
+    }
+
+    private loadLaunchModule(client: Client) {
+        const rootPath = process.cwd().replace(`\\`, "/");
+		const path = `${rootPath}${this.manager.launchModulePath}`;
+		let launchModule = require(path);
+
+		if (launchModule.default !== undefined) launchModule = launchModule.default;
+		if (launchModule.prototype instanceof LaunchModule) {
+			this.launchModule = new launchModule({ client, cluster: this, ipc: this.ipc });
+			this.launchModule!.launch();
+		} else {
+			this.manager.logger.error("Cluster Manager", "You must inherit the `LaunchModule` class");
+		}
     }
 
     public updateStats(client: Client) {
