@@ -1,5 +1,5 @@
 {
-  "name": "nedbot-sharder",
+  "name": "@nedbot/sharder",
   "version": "0.0.1",
   "description": "A sharding manager for the Eris Discord API library.",
   "main": "dist/index.js",
