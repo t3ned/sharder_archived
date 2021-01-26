@@ -21,7 +21,6 @@ yarn add @nedbot/sharder
 ```typescript
 // index.ts
 import { ClusterManager } from "@nedbot/sharder";
-import { Client } from "path/to/custom/client";
 
 const manager = new ClusterManager("Your discord token", "path/to/main.js", {
   shardCount: 31,
