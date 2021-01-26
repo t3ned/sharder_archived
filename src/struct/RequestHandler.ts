@@ -1,6 +1,6 @@
-import { randomBytes } from "crypto";
-import { IPC } from "./IPC";
+import type { IPC } from "./IPC";
 import { RequestMethod, MessageFile, RequestHandler, Client } from "eris";
+import { randomBytes } from "crypto";
 
 export class SyncedRequestHandler extends RequestHandler {
   public ipc: IPC;
@@ -56,8 +56,7 @@ export class SyncedRequestHandler extends RequestHandler {
             data.error.stack +
             "\n" +
             stackCapture.substring(stackCapture.indexOf("\n") + 1);
-          // error.code = data.error.code;
-          console.log(error.stack);
+
           reject(error);
         } else {
           resolve(data.data);

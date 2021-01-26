@@ -1,5 +1,5 @@
-import { EventEmitter } from "events";
 import type { Guild, AnyChannel, User, Member } from "eris";
+import { EventEmitter } from "events";
 
 export class IPC extends EventEmitter {
   public events = new Map<string, { callback: Callback }>();

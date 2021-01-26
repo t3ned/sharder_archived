@@ -1,8 +1,8 @@
-import { Client, Shard } from "eris";
-import { ClusterManager } from "./ClusterManager";
-import { IPC } from "../struct/IPC";
+import type { Client, Shard } from "eris";
+import type { ClusterManager } from "./ClusterManager";
 import { SyncedRequestHandler } from "../struct/RequestHandler";
 import { LaunchModule } from "../struct/LaunchModule";
+import { IPC, IPCMessage } from "../struct/IPC";
 
 export class Cluster {
   public client: Client;
@@ -11,11 +11,12 @@ export class Cluster {
 
   public id = -1;
 
+  // Cluster shard values
   public shardCount = 0;
-  public maxShards = 0;
   public firstShardID = 0;
   public lastShardID = 0;
 
+  // Cluster stats
   public guilds = 0;
   public users = 0;
   public channels = 0;
@@ -23,6 +24,7 @@ export class Cluster {
   public voiceConnections = 0;
   public shardStats: ShardStats[] = [];
 
+  // Base cluster launch module
   public launchModule: LaunchModule | null = null;
 
   public constructor(manager: ClusterManager) {
@@ -38,7 +40,7 @@ export class Cluster {
       this.manager.logger.error(`Cluster ${this.id}`, JSON.stringify(reason));
     });
 
-    process.on("message", async (message) => {
+    process.on("message", async (message: IPCMessage) => {
       if (!message.name) return;
 
       switch (message.name) {
@@ -50,6 +52,7 @@ export class Cluster {
           if (this.shardCount) return this.connect();
           process.send!({ name: "shardsStarted" });
           break;
+
         case "statsUpdate":
           process.send!({
             name: "statsUpdate",
@@ -67,6 +70,7 @@ export class Cluster {
             }
           });
           break;
+
         case "fetchGuild": {
           if (!this.client) return;
 
@@ -76,6 +80,7 @@ export class Cluster {
             process.send!({ name: "fetchReturn", value: value.toJSON() });
           break;
         }
+
         case "fetchChannel": {
           if (!this.client) return;
 
@@ -85,6 +90,7 @@ export class Cluster {
             process.send!({ name: "fetchReturn", value: value.toJSON() });
           break;
         }
+
         case "fetchUser": {
           if (!this.client) return;
 
@@ -94,6 +100,7 @@ export class Cluster {
             process.send!({ name: "fetchReturn", value: value.toJSON() });
           break;
         }
+
         case "fetchMember": {
           if (!this.client) return;
 
@@ -105,9 +112,11 @@ export class Cluster {
             process.send!({ name: "fetchReturn", value: value.toJSON() });
           break;
         }
+
         case "fetchReturn":
           this.ipc.emit(message.id, message.value);
           break;
+
         case "restart":
           process.exit(1);
       }
@@ -140,10 +149,12 @@ export class Cluster {
     const client = new clientBase(token, clientOptions);
     Object.defineProperty(this, "client", { value: client });
 
+    // Overwrite default request handler to sync ratelimits
     this.client.requestHandler = new SyncedRequestHandler(client, this.ipc, {
       timeout: this.client.options.requestTimeout ?? 20000
     });
 
+    // Start emitting stats
     this.startStatsUpdate(client);
 
     client.on("connect", (id) => {
@@ -162,7 +173,7 @@ export class Cluster {
       process.send!({ name: "shardsStarted" });
     });
 
-    client.on("ready", () => {
+    client.once("ready", () => {
       this.loadLaunchModule(client);
     });
 
@@ -207,21 +218,13 @@ export class Cluster {
   }
 
   public updateStats(client: Client) {
-    const {
-      guilds,
-      users,
-      uptime,
-      voiceConnections,
-      shards,
-      channelGuildMap
-    } = client;
-    this.guilds = guilds.size;
-    this.users = users.size;
-    this.channels = Object.keys(channelGuildMap).length;
-    this.uptime = uptime;
-    this.voiceConnections = voiceConnections.size;
+    this.guilds = client.guilds.size;
+    this.users = client.users.size;
+    this.channels = Object.keys(client.channelGuildMap).length;
+    this.uptime = client.uptime;
+    this.voiceConnections = client.voiceConnections.size;
 
-    this.shardStats = shards.map((shard) => ({
+    this.shardStats = client.shards.map((shard) => ({
       id: shard.id,
       ready: shard.ready,
       latency: shard.latency,
