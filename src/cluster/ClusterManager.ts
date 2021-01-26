@@ -1,5 +1,5 @@
 import type { APIRequestError, IPCMessage } from "../struct/IPC";
-import { Client, ClientOptions } from "eris";
+import { Client, ClientOptions, EmbedOptions } from "eris";
 import { Cluster, ClusterStats, RawCluster } from "./Cluster";
 
 import { EventEmitter } from "events";
@@ -20,6 +20,7 @@ export class ClusterManager extends EventEmitter {
   public token: string;
   public printLogoPath: string;
   public launchModulePath: string;
+  public webhooks: Webhooks;
 
   // Manager shard values
   public shardCount: number | "auto";
@@ -71,6 +72,15 @@ export class ClusterManager extends EventEmitter {
 
     this.statsUpdateInterval = options.statsUpdateInterval ?? 0;
 
+    this.webhooks = Object.assign<Webhooks, Webhooks>(
+      {
+        cluster: undefined,
+        shard: undefined,
+        colors: { success: 0x77dd77, error: 0xff6961, warning: 0xffb347 }
+      },
+      options.webhooks || {}
+    );
+
     // Initialise a logger
     this.logger = new Logger(
       options.loggerOptions ?? {
@@ -119,7 +129,15 @@ export class ClusterManager extends EventEmitter {
           `Starting ${this.clusterCount} clusters with ${this.shardCount} shards`
         );
 
+        const embed = {
+          title: `Launching ${this.clusterCount} clusters`,
+          description: `Preparing ${this.shardCount} shards`,
+          color: this.webhooks.colors!.success
+        };
+
+        this.sendWebhook("cluster", embed);
         setupMaster({ silent: false });
+
         // Start the workers starting from cluster 0
         this.startCluster(0);
       });
@@ -243,7 +261,7 @@ export class ClusterManager extends EventEmitter {
    * @param worker The worker to restart
    * @param code The reason for exiting
    */
-  public restartCluster(worker: Worker, code?: number) {
+  public restartCluster(worker: Worker, code = 1) {
     const clusterID = this.workers.get(worker.id)!;
     const cluster = this.clusters.get(clusterID)!;
 
@@ -254,6 +272,14 @@ export class ClusterManager extends EventEmitter {
       );
 
     this.logger.warn("Cluster Manager", `Restarting cluster ${clusterID}...`);
+
+    const embed = {
+      title: `Cluster ${clusterID} died with code ${code}`,
+      description: `Restarting shards ${cluster.firstShardID} - ${cluster.lastShardID}`,
+      color: this.webhooks.colors!.error
+    };
+
+    this.sendWebhook("cluster", embed);
 
     const newWorker = fork();
 
@@ -518,6 +544,14 @@ export class ClusterManager extends EventEmitter {
     const clusterCountDecimal = (shardCount as number) / shardsPerCluster;
     return Math.ceil(clusterCountDecimal);
   }
+
+  public sendWebhook(type: "cluster" | "shard", embed: EmbedOptions) {
+    const webhook = this.webhooks[type];
+    if (!webhook) return;
+
+    const { id, token } = webhook;
+    return this.client.executeWebhook(id, token, { embeds: [embed] });
+  }
 }
 
 export interface ClusterManager {
@@ -529,6 +563,7 @@ export interface ClusterManagerOptions {
   client: typeof Client;
   clientOptions: ClientOptions;
   loggerOptions: Partial<LoggerOptions>;
+  webhooks: Webhooks;
 
   shardCount: number | "auto";
   firstShardID: number;
@@ -552,4 +587,21 @@ export interface ClusterManagerStats {
   channels: number;
   ramUsage: number;
   voiceConnections: number;
+}
+
+export interface Webhooks {
+  cluster?: WebhookOptions;
+  shard?: WebhookOptions;
+  colors?: WebhookColorOptions;
+}
+
+export interface WebhookOptions {
+  id: string;
+  token: string;
+}
+
+export interface WebhookColorOptions {
+  success: number;
+  error: number;
+  warning: number;
 }

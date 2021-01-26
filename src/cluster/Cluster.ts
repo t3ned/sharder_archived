@@ -163,6 +163,14 @@ export class Cluster {
 
     client.on("shardReady", (id) => {
       logger.debug(loggerSource, `Shard ${id} is ready`);
+
+      const embed = {
+        title: `Shard ${id}`,
+        description: `Ready!`,
+        color: this.manager.webhooks.colors!.success
+      };
+
+      this.manager.sendWebhook("shard", embed);
     });
 
     client.on("ready", async () => {
@@ -170,6 +178,15 @@ export class Cluster {
         loggerSource,
         `Shards ${this.firstShardID} - ${this.lastShardID} are ready`
       );
+
+      const embed = {
+        title: `Cluster ${this.id}`,
+        description: `Connected shards ${this.firstShardID} - ${this.lastShardID}`,
+        color: this.manager.webhooks.colors!.success
+      };
+
+      this.manager.sendWebhook("cluster", embed);
+
       process.send!({ name: "shardsStarted" });
     });
 
@@ -179,10 +196,26 @@ export class Cluster {
 
     client.on("shardDisconnect", (error, id) => {
       logger.error(loggerSource, `Shard ${id} disconnected`, error);
+
+      const embed = {
+        title: `Shard ${id}`,
+        description: `Disconnected from the websocket`,
+        color: this.manager.webhooks.colors!.error
+      };
+
+      this.manager.sendWebhook("shard", embed);
     });
 
     client.on("shardResume", (id) => {
       logger.warn(loggerSource, `Shard ${id} reconnected`);
+
+      const embed = {
+        title: `Shard ${id}`,
+        description: `Successfully reconnected`,
+        color: this.manager.webhooks.colors!.success
+      };
+
+      this.manager.sendWebhook("shard", embed);
     });
 
     client.on("error", (error, id) => {
