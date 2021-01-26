@@ -19,10 +19,11 @@ yarn add @nedbot/sharder
 ## Usage
 
 ```typescript
+// index.ts
 import { ClusterManager } from "@nedbot/sharder";
 import { Client } from "path/to/custom/client";
 
-const manager = new ClusterManager("Your discord token", {
+const manager = new ClusterManager("Your discord token", "path/to/main.js", {
   shardCount: 31,
   firstShardID: 0,
   lastShardID: 0,
@@ -56,6 +57,17 @@ const manager = new ClusterManager("Your discord token", {
 manager.on("stats", (stats) => {
   console.log(stats);
 });
+```
+
+```typescript
+// main.ts
+import { LaunchModule } from "@nedbot/sharder";
+
+export default class extends LaunchModule {
+  public launch() {
+    console.log("Launched!");
+  }
+}
 ```
 
 ## Options
