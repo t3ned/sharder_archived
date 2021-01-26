@@ -198,7 +198,7 @@ export class Cluster {
 
   private loadLaunchModule(client: Client) {
     const rootPath = process.cwd().replace(`\\`, "/");
-    const path = `${rootPath}${this.manager.launchModulePath}`;
+    const path = `${rootPath}/${this.manager.launchModulePath}`;
     let launchModule = require(path);
 
     if (launchModule.default !== undefined) launchModule = launchModule.default;

@@ -6,7 +6,6 @@ import { EventEmitter } from "events";
 import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
 import { cpus } from "os";
 import { readFileSync } from "fs";
-import { join } from "path";
 
 import { ShardQueue } from "../struct/ShardQueue";
 import { Logger, LoggerOptions } from "@nedbot/logger";
@@ -280,7 +279,8 @@ export class ClusterManager extends EventEmitter {
    * Read and print the logo from the file
    */
   private printLogo() {
-    const pathToFile = join(__dirname, "..", "..", this.printLogoPath);
+    const rootPath = process.cwd().replace(`\\`, "/");
+    const pathToFile = `${rootPath}/${this.printLogoPath}`;
 
     try {
       console.clear();
