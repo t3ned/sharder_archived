@@ -13,6 +13,10 @@ export abstract class LaunchModule {
         this.ipc = setup.ipc;
     }
 
+    public restartCluster(clusterID: number) {
+        this.ipc.sendTo(clusterID, "restart", { name: "restart" });
+    }
+
     public abstract launch(): void;
 }
 

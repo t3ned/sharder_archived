@@ -104,6 +104,8 @@ export class Cluster {
                 case "fetchReturn":
                     this.ipc.emit(message.id, message.value);
                     break;
+                case "restart":
+                    process.exit(1);
             }
         });
     }

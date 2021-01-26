@@ -193,12 +193,40 @@ export class ClusterManager extends EventEmitter {
            }
         });
 
+        on("exit", (worker, code) => {
+            this.restartCluster(worker, code);
+        });
+
         this.queue.on("execute", (item) => {
             const cluster = this.clusters.get(item.clusterID);
             if (cluster) {
                 const worker = workers[cluster.workerID]!;
                 worker.send(item);
             }
+        });
+    }
+
+    public restartCluster(worker: Worker, code?: number) {
+        const clusterID = this.workers.get(worker.id)!;
+        const cluster = this.clusters.get(clusterID)!;
+
+        if (code) this.logger.error("Cluster Manager", `Cluster ${clusterID} died with code ${code}`);
+        this.logger.warn("Cluster Manager", `Restarting cluster ${clusterID}...`);
+
+		const newWorker = fork();
+
+		this.workers.delete(worker.id);
+		this.clusters.set(clusterID, Object.assign(cluster, { workerID: newWorker.id }));
+		this.workers.set(newWorker.id, clusterID);
+
+        this.queue.enqueue({
+            clusterID,
+            name: "connect",
+            token: this.token,
+            clusterCount: this.clusterCount as number,
+            shardCount: cluster.shardCount,
+            firstShardID: cluster.firstShardID,
+            lastShardID: cluster.lastShardID
         });
     }
 

@@ -10,8 +10,8 @@ export class IPC extends EventEmitter {
 
         this.timeout = timeout;
 
-        process.on("message", (message: Message) => {
-            const event = this.events.get(message.eventName);
+        process.on("message", (message: IPCMessage) => {
+            const event = this.events.get(message.eventName!);
             if (event) event.callback(message);
         });
     }
@@ -38,7 +38,7 @@ export class IPC extends EventEmitter {
      * @param event The name of the event
      * @param message The message to send to the clusters
      */
-    public broadcast(event: string, message: Message) {
+    public broadcast(event: string, message: IPCMessage) {
         message.eventName = event;
         process.send!({ name: "broadcast", message });
     }
@@ -49,7 +49,7 @@ export class IPC extends EventEmitter {
      * @param event The name of the event
      * @param message The message to send to the cluster
      */
-    public sendTo(clusterID: number, event: string, message: Message) {
+    public sendTo(clusterID: number, event: string, message: IPCMessage) {
         message.eventName = event;
         process.send!({ name: "send", clusterID, message });
     }
@@ -109,13 +109,16 @@ export class IPC extends EventEmitter {
     }
 }
 
-export type Callback = (data: Message) => void;
+export type Callback = (data: IPCMessage) => void;
 
 export interface Message {
+    name: string;
     eventName: string;
     error: APIRequestError;
     data: any;
 }
+
+export type IPCMessage = Partial<Message> & Record<string, any>;
 
 export interface APIRequestError {
     code: number;
