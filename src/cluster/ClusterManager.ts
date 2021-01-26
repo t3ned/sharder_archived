@@ -528,7 +528,7 @@ export interface ClusterManager {
 export interface ClusterManagerOptions {
   client: typeof Client;
   clientOptions: ClientOptions;
-  loggerOptions: LoggerOptions;
+  loggerOptions: Partial<LoggerOptions>;
 
   shardCount: number | "auto";
   firstShardID: number;
@@ -541,7 +541,6 @@ export interface ClusterManagerOptions {
 
   statsUpdateInterval: number;
   printLogoPath: string;
-  launchModulePath: string;
 }
 
 export interface ClusterManagerStats {
