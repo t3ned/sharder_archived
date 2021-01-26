@@ -64,7 +64,7 @@ export class ClusterManager extends EventEmitter {
     this.shardCount = options.shardCount ?? "auto";
     this.firstShardID = options.firstShardID ?? 0;
     this.lastShardID = options.lastShardID ?? 0;
-    this.guildsPerShard = options.guildsPerShard ?? 1000;
+    this.guildsPerShard = options.guildsPerShard ?? 1500;
 
     this.clusterCount = options.clusterCount || "auto";
     this.clusterTimeout = options.clusterTimeout ?? 5000;
