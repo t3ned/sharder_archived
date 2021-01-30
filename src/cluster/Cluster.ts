@@ -266,6 +266,7 @@ export class Cluster {
   }
 
   public get latency() {
+    if (!this.shardCount) return 0;
     return this.shardStats.reduce((a, b) => a + b.latency, 0) / this.shardCount;
   }
 
