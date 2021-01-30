@@ -10,6 +10,7 @@ export class Cluster {
   public ipc = new IPC();
 
   public id = -1;
+  public status: ClusterStatus = "IDLE";
 
   // Cluster shard values
   public shardCount = 0;
@@ -53,11 +54,16 @@ export class Cluster {
           process.send!({ name: "shardsStarted" });
           break;
 
+        case "status":
+          this.status = message.status;
+          break;
+
         case "statsUpdate":
           process.send!({
             name: "statsUpdate",
             stats: {
               id: this.id,
+              status: this.status,
               shards: this.shardCount,
               guilds: this.guilds,
               users: this.users,
@@ -135,6 +141,8 @@ export class Cluster {
 
     logger.info(loggerSource, `Connecting with ${this.shardCount} shards`);
 
+    this.status = "CONNECTING";
+
     // Overwrite passed clientOptions
     const options = {
       autoreconnect: true,
@@ -192,6 +200,7 @@ export class Cluster {
 
     client.once("ready", () => {
       this.loadLaunchModule(client);
+      this.status = "READY";
     });
 
     client.on("shardDisconnect", (error, id) => {
@@ -282,8 +291,17 @@ export interface RawCluster {
   lastShardID: number;
 }
 
+export type ClusterStatus =
+  | "IDLE"
+  | "QUEUED"
+  | "CONNECTING"
+  | "RECONNECTING"
+  | "READY"
+  | "DEAD";
+
 export interface ClusterStats {
   id: number;
+  status: ClusterStatus;
   shards: number;
   guilds: number;
   users: number;

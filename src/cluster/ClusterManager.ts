@@ -244,6 +244,8 @@ export class ClusterManager extends EventEmitter {
 
     // Restart a cluster if it dies
     on("exit", (worker, code) => {
+      const clusterID = this.workers.get(worker.id)!;
+      this.sendTo(clusterID, { name: "status", status: "DEAD" });
       this.restartCluster(worker, code);
     });
 
@@ -290,6 +292,7 @@ export class ClusterManager extends EventEmitter {
       Object.assign(cluster, { workerID: newWorker.id })
     );
 
+    this.sendTo(clusterID, { name: "status", status: "RECONNECTING" });
     this.queue.enqueue({
       clusterID,
       name: "connect",
@@ -438,15 +441,19 @@ export class ClusterManager extends EventEmitter {
     for (let clusterID = 0; clusterID < this.clusterCount; clusterID++) {
       const cluster = this.clusters.get(clusterID)!;
 
-      this.queue.enqueue({
-        clusterID,
-        name: "connect",
-        token: this.token,
-        clusterCount: this.clusterCount as number,
-        shardCount: cluster.shardCount,
-        firstShardID: cluster.firstShardID,
-        lastShardID: cluster.lastShardID
-      });
+      if (cluster.shardCount) {
+        this.sendTo(clusterID, { name: "status", status: "QUEUED" });
+
+        this.queue.enqueue({
+          clusterID,
+          name: "connect",
+          token: this.token,
+          clusterCount: this.clusterCount as number,
+          shardCount: cluster.shardCount,
+          firstShardID: cluster.firstShardID,
+          lastShardID: cluster.lastShardID
+        });
+      }
     }
 
     this.logger.info("Cluster Manager", "All shards spread");
