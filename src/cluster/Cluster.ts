@@ -156,6 +156,7 @@ export class Cluster {
     // Initialise the client
     const client = new clientBase(token, clientOptions);
     Object.defineProperty(this, "client", { value: client });
+    this.client.cluster = this;
 
     // Overwrite default request handler to sync ratelimits
     this.client.requestHandler = new SyncedRequestHandler(client, this.ipc, {
@@ -334,4 +335,10 @@ export interface ShardStats {
   ready: boolean;
   latency: number;
   status: Shard["status"];
+}
+
+declare module "eris" {
+  export interface Client {
+    cluster: Cluster;
+  }
 }
