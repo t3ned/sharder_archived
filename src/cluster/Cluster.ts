@@ -193,9 +193,9 @@ export class Cluster {
         color: this.manager.webhooks.colors!.success
       };
 
-      this.manager.sendWebhook("cluster", embed);
-
       process.send!({ name: "shardsStarted" });
+      this.manager.sendWebhook("cluster", embed);
+      this.status = "READY";
     });
 
     client.once("ready", () => {
@@ -213,6 +213,17 @@ export class Cluster {
       };
 
       this.manager.sendWebhook("shard", embed);
+
+      if (this.allShardsDisconnected) {
+        const embed = {
+          title: `Cluster ${this.id}`,
+          description: "All shards have disconnected",
+          color: this.manager.webhooks.colors!.error
+        };
+
+        this.manager.sendWebhook("cluster", embed);
+        this.status = "DEAD";
+      }
     });
 
     client.on("shardResume", (id) => {
@@ -225,6 +236,7 @@ export class Cluster {
       };
 
       this.manager.sendWebhook("shard", embed);
+      if (this.status === "DEAD") this.status = "RECONNECTING";
     });
 
     client.on("error", (error, id) => {
@@ -281,6 +293,10 @@ export class Cluster {
 
   private startStatsUpdate(client: Client) {
     setInterval(() => this.updateStats(client), 5000);
+  }
+
+  private get allShardsDisconnected() {
+    return this.client.shards.every((x) => x.status === "disconnected");
   }
 }
 
