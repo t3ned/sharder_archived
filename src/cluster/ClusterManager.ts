@@ -170,8 +170,13 @@ export class ClusterManager extends EventEmitter {
           this.stats.clusters.push(message.stats);
           this.stats.clustersLaunched++;
 
-          if (this.stats.clustersLaunched === this.clusters.size)
+          if (this.stats.clustersLaunched === this.clusters.size) {
+            this.stats.clusters = this.stats.clusters.sort(
+              (a, b) => a.id - b.id
+            );
+
             this.emit("stats", this.stats);
+          }
           break;
         }
 
@@ -244,8 +249,6 @@ export class ClusterManager extends EventEmitter {
 
     // Restart a cluster if it dies
     on("exit", (worker, code) => {
-      const clusterID = this.workers.get(worker.id)!;
-      this.sendTo(clusterID, { name: "status", status: "DEAD" });
       this.restartCluster(worker, code);
     });
 
