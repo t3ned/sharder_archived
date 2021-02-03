@@ -2,7 +2,7 @@ import type { Guild, AnyChannel, User, Member } from "eris";
 import { EventEmitter } from "events";
 
 export class IPC extends EventEmitter {
-  public events = new Map<string, { callback: Callback }>();
+  public events = new Map<string, Callback>();
   public timeout: number;
 
   public constructor(timeout = 5000) {
@@ -11,8 +11,9 @@ export class IPC extends EventEmitter {
     this.timeout = timeout;
 
     process.on("message", (message: IPCMessage) => {
-      const event = this.events.get(message.eventName!);
-      if (event) event.callback(message);
+      if (!message.eventName) return;
+      const callback = this.events.get(message.eventName);
+      if (callback) callback(message);
     });
   }
 
@@ -22,7 +23,7 @@ export class IPC extends EventEmitter {
    * @param callback The callback function for the event
    */
   public register(event: string, callback: Callback) {
-    this.events.set(event, { callback });
+    this.events.set(event, callback);
   }
 
   /**
@@ -38,9 +39,9 @@ export class IPC extends EventEmitter {
    * @param event The name of the event
    * @param message The message to send to the clusters
    */
-  public broadcast(event: string, message: IPCMessage) {
+  public broadcast(event: string, message: IPCMessage = {}) {
     message.eventName = event;
-    process.send!({ name: "broadcast", message });
+    process.send!({ eventName: "broadcast", message });
   }
 
   /**
@@ -49,9 +50,9 @@ export class IPC extends EventEmitter {
    * @param event The name of the event
    * @param message The message to send to the cluster
    */
-  public sendTo(clusterID: number, event: string, message: IPCMessage) {
+  public sendTo(clusterID: number, event: string, message: IPCMessage = {}) {
     message.eventName = event;
-    process.send!({ name: "send", clusterID, message });
+    process.send!({ eventName: "send", clusterID, message });
   }
 
   /**
@@ -59,7 +60,7 @@ export class IPC extends EventEmitter {
    * @param id The id of the guild to fetch
    */
   public fetchGuild(id: string) {
-    process.send!({ name: "fetchGuild", id });
+    process.send!({ eventName: "fetchGuild", id });
     return this.onFetch<Guild>(id);
   }
 
@@ -68,7 +69,7 @@ export class IPC extends EventEmitter {
    * @param id The id of the channel to fetch
    */
   public fetchChannel(id: string) {
-    process.send!({ name: "fetchChannel", id });
+    process.send!({ eventName: "fetchChannel", id });
     return this.onFetch<AnyChannel>(id);
   }
 
@@ -77,7 +78,7 @@ export class IPC extends EventEmitter {
    * @param id The id of the user to fetch
    */
   public fetchUser(id: string) {
-    process.send!({ name: "fetchUser", id });
+    process.send!({ eventName: "fetchUser", id });
     return this.onFetch<User>(id);
   }
 
@@ -87,7 +88,7 @@ export class IPC extends EventEmitter {
    * @param id The id of the member to fetch
    */
   public fetchMember(guildID: string, id: string) {
-    process.send!({ name: "fetchMember", guildID, id });
+    process.send!({ eventName: "fetchMember", guildID, id });
     return this.onFetch<Member>(id);
   }
 
@@ -112,7 +113,6 @@ export class IPC extends EventEmitter {
 export type Callback = (data: IPCMessage) => void;
 
 export interface Message {
-  name: string;
   eventName: string;
   error: APIRequestError;
   data: any;

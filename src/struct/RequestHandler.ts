@@ -29,7 +29,7 @@ export class SyncedRequestHandler extends RequestHandler {
         file.file = Buffer.from(file.file).toString("base64");
 
       process.send!({
-        name: "apiRequest",
+        eventName: "apiRequest",
         requestID,
         method,
         url,

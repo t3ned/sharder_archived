@@ -42,16 +42,16 @@ export class Cluster {
     });
 
     process.on("message", async (message: IPCMessage) => {
-      if (!message.name) return;
+      if (!message.eventName) return;
 
-      switch (message.name) {
+      switch (message.eventName) {
         case "connect":
           this.firstShardID = message.firstShardID;
           this.lastShardID = message.lastShardID;
           this.id = message.clusterID;
           this.shardCount = message.shardCount;
           if (this.shardCount) return this.connect();
-          process.send!({ name: "shardsStarted" });
+          process.send!({ eventName: "shardsStarted" });
           break;
 
         case "status":
@@ -60,7 +60,7 @@ export class Cluster {
 
         case "statsUpdate":
           process.send!({
-            name: "statsUpdate",
+            eventName: "statsUpdate",
             stats: {
               id: this.id,
               status: this.status,
@@ -83,7 +83,7 @@ export class Cluster {
           const id = message.value;
           const value = this.client.guilds.get(id);
           if (value)
-            process.send!({ name: "fetchReturn", value: value.toJSON() });
+            process.send!({ eventName: "fetchReturn", value: value.toJSON() });
           break;
         }
 
@@ -93,7 +93,7 @@ export class Cluster {
           const id = message.value;
           const value = this.client.getChannel(id);
           if (value)
-            process.send!({ name: "fetchReturn", value: value.toJSON() });
+            process.send!({ eventName: "fetchReturn", value: value.toJSON() });
           break;
         }
 
@@ -103,7 +103,7 @@ export class Cluster {
           const id = message.value;
           const value = this.client.users.get(id);
           if (value)
-            process.send!({ name: "fetchReturn", value: value.toJSON() });
+            process.send!({ eventName: "fetchReturn", value: value.toJSON() });
           break;
         }
 
@@ -115,7 +115,7 @@ export class Cluster {
           const value = guild?.members.get(id);
 
           if (value)
-            process.send!({ name: "fetchReturn", value: value.toJSON() });
+            process.send!({ eventName: "fetchReturn", value: value.toJSON() });
           break;
         }
 
@@ -194,7 +194,7 @@ export class Cluster {
         color: this.manager.webhooks.colors!.success
       };
 
-      process.send!({ name: "shardsStarted" });
+      process.send!({ eventName: "shardsStarted" });
       this.manager.sendWebhook("cluster", embed);
       this.status = "READY";
     });

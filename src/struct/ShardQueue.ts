@@ -29,7 +29,7 @@ export interface ShardQueue {
 
 export interface QueueItem {
   clusterID: number;
-  name: "connect";
+  eventName: "connect";
   token: string;
   clusterCount: number;
   shardCount: number;

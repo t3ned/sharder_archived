@@ -147,12 +147,12 @@ export class ClusterManager extends EventEmitter {
       cluster.spawn();
     }
 
-    on("message", async (worker, message) => {
-      if (!message.name) return;
+    on("message", async (worker, message: IPCMessage) => {
+      if (!message.eventName) return;
 
       const clusterID = this.workers.get(worker.id)!;
 
-      switch (message.name) {
+      switch (message.eventName) {
         case "shardsStarted":
           this.queue.next();
           if (this.queue.length)
@@ -183,12 +183,12 @@ export class ClusterManager extends EventEmitter {
         case "fetchGuild":
         case "fetchChannel":
         case "fetchUser":
-          this.fetchInfo(0, message.name, message.id);
+          this.fetchInfo(0, message.eventName, message.id);
           this.callbacks.set(message.id, clusterID);
           break;
 
         case "fetchMember":
-          this.fetchInfo(0, message.name, [message.guildID, message.id]);
+          this.fetchInfo(0, message.eventName, [message.guildID, message.id]);
           this.callbacks.set(message.id, clusterID);
           break;
 
@@ -198,7 +198,7 @@ export class ClusterManager extends EventEmitter {
 
           if (cluster) {
             workers[cluster.workerID]!.send({
-              name: "fetchReturn",
+              eventName: "fetchReturn",
               id: message.value.id,
               value: message.value
             });
@@ -295,10 +295,10 @@ export class ClusterManager extends EventEmitter {
       Object.assign(cluster, { workerID: newWorker.id })
     );
 
-    this.sendTo(clusterID, { name: "status", status: "RECONNECTING" });
+    this.sendTo(clusterID, { eventName: "status", status: "RECONNECTING" });
     this.queue.enqueue({
       clusterID,
-      name: "connect",
+      eventName: "connect",
       token: this.token,
       clusterCount: this.clusterCount as number,
       shardCount: cluster.shardCount,
@@ -332,13 +332,13 @@ export class ClusterManager extends EventEmitter {
    * @param name The type of data to fetch
    * @param value The lookup value
    */
-  public fetchInfo(start: number, name: string, value: string | string[]) {
+  public fetchInfo(start: number, eventName: string, value: string | string[]) {
     const cluster = this.clusters.get(start);
 
     if (cluster) {
       const worker = workers[cluster.workerID]!;
-      worker.send({ name, value });
-      this.fetchInfo(start + 1, name, value);
+      worker.send({ eventName, value });
+      this.fetchInfo(start + 1, eventName, value);
     }
   }
 
@@ -351,7 +351,7 @@ export class ClusterManager extends EventEmitter {
     const worker = clusters[start];
 
     if (worker) {
-      worker.send({ name: "statsUpdate" });
+      worker.send({ eventName: "statsUpdate" });
       this.updateStats(clusters, ++start);
     }
   }
@@ -445,11 +445,11 @@ export class ClusterManager extends EventEmitter {
       const cluster = this.clusters.get(clusterID)!;
 
       if (cluster.shardCount) {
-        this.sendTo(clusterID, { name: "status", status: "QUEUED" });
+        this.sendTo(clusterID, { eventName: "status", status: "QUEUED" });
 
         this.queue.enqueue({
           clusterID,
-          name: "connect",
+          eventName: "connect",
           token: this.token,
           clusterCount: this.clusterCount as number,
           shardCount: cluster.shardCount,
