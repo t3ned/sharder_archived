@@ -258,11 +258,7 @@ export class Cluster {
 
     if (launchModule.default !== undefined) launchModule = launchModule.default;
     if (launchModule.prototype instanceof LaunchModule) {
-      this.launchModule = new launchModule({
-        client,
-        cluster: this,
-        ipc: this.ipc
-      });
+      this.launchModule = new launchModule(client);
       this.launchModule!.launch();
     } else {
       this.manager.logger.error(
