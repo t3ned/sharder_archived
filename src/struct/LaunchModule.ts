@@ -8,7 +8,7 @@ export abstract class LaunchModule {
   public ipc: IPC;
 
   public constructor(setup: LaunchModuleSetup) {
-    this.client = setup.client;
+    Object.defineProperty(this, "client", { value: setup.client });
     this.cluster = setup.cluster;
     this.ipc = setup.ipc;
   }
