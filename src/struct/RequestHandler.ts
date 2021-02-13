@@ -46,10 +46,10 @@ export class SyncedRequestHandler extends RequestHandler {
             `Request timed out (>${this.timeout}ms) on ${method} ${url}`
           )
         );
-        this.ipc.unregister(`apiRequest.${requestID}`);
+        this.ipc.unregister(`apiResponse.${requestID}`);
       }, this.timeout);
 
-      this.ipc.register(`apiRequest.${requestID}`, (data) => {
+      this.ipc.register(`apiResponse.${requestID}`, (data) => {
         if (data.error) {
           const error = new Error(data.error.message);
           error.stack =
@@ -63,7 +63,7 @@ export class SyncedRequestHandler extends RequestHandler {
         }
 
         clearTimeout(timeout);
-        this.ipc.unregister(`apiRequest.${requestID}`);
+        this.ipc.unregister(`apiResponse.${requestID}`);
       });
     });
   }

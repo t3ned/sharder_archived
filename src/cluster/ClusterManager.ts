@@ -228,7 +228,7 @@ export class ClusterManager extends EventEmitter {
             );
 
             this.sendTo(clusterID, {
-              eventName: `apiRequest.${message.requestID}`,
+              eventName: `apiResponse.${message.requestID}`,
               data
             });
           } catch (e) {
