@@ -72,20 +72,19 @@ export class ClusterManager extends EventEmitter {
 
     this.statsUpdateInterval = options.statsUpdateInterval ?? 0;
 
-    this.webhooks = Object.assign<Webhooks, Webhooks>(
-      {
-        cluster: undefined,
-        shard: undefined,
-        colors: { success: 0x77dd77, error: 0xff6961, warning: 0xffb347 }
-      },
-      options.webhooks || {}
-    );
+    this.webhooks = {
+      cluster: undefined,
+      shard: undefined,
+      colors: { success: 0x77dd77, error: 0xff6961, warning: 0xffb347 },
+      ...options.webhooks
+    };
 
     // Initialise a logger
     this.logger = new Logger(
       options.loggerOptions ?? {
         enableErrorLogs: false,
-        enableInfoLogs: false
+        enableInfoLogs: false,
+        logFileDirectory: "logs"
       }
     );
 
@@ -113,7 +112,7 @@ export class ClusterManager extends EventEmitter {
       this.printLogo();
 
       process.on("uncaughtException", (error) => {
-        this.logger.error("Cluster Manager", error.stack ?? error.message);
+        this.logger.error("Cluster Manager", error);
       });
 
       process.nextTick(async () => {
@@ -154,12 +153,15 @@ export class ClusterManager extends EventEmitter {
 
       switch (message.eventName) {
         case "shardsStarted":
+          // All shards from the previous cluster have started
+          // so move to the next cluster in the queue
           this.queue.next();
           if (this.queue.length)
             setTimeout(() => this.queue.execute(), this.clusterTimeout);
           break;
 
         case "statsUpdate": {
+          // Add stats to the total stats
           message.stats.id = clusterID;
           this.stats.ramUsage += message.stats.ramUsage;
           this.stats.guilds += message.stats.guilds;
@@ -170,10 +172,9 @@ export class ClusterManager extends EventEmitter {
           this.stats.clusters.push(message.stats);
           this.stats.clustersLaunched++;
 
+          // Emit the stats event if all clusters have sent their stats
           if (this.stats.clustersLaunched === this.clusters.size) {
-            this.stats.clusters = this.stats.clusters.sort(
-              (a, b) => a.id - b.id
-            );
+            this.stats.clusters = this.stats.clusters.sort((a, b) => a.id - b.id);
 
             this.emit("stats", this.stats);
           }
@@ -183,6 +184,7 @@ export class ClusterManager extends EventEmitter {
         case "fetchGuild":
         case "fetchChannel":
         case "fetchUser":
+          // Fetch the cached value from each cluster
           this.fetchInfo(0, message.eventName, message.id);
           this.callbacks.set(message.id, clusterID);
           break;
@@ -192,6 +194,7 @@ export class ClusterManager extends EventEmitter {
           this.callbacks.set(message.id, clusterID);
           break;
 
+        // Send the cached value back to the cluster
         case "fetchReturn":
           const callback = this.callbacks.get(message.value.id)!;
           const cluster = this.clusters.get(callback);
@@ -207,14 +210,17 @@ export class ClusterManager extends EventEmitter {
           }
           break;
 
+        // Sends a message to all the clusters
         case "broadcast":
           this.broadcast(0, message.message);
           break;
 
+        // Sends a message to a specific cluster
         case "send":
           this.sendTo(message.clusterID, message.message);
           break;
 
+        // Handle api requests sent from the request handler
         case "apiRequest":
           try {
             const data = await this.client.requestHandler.request(
@@ -252,6 +258,7 @@ export class ClusterManager extends EventEmitter {
       this.restartCluster(worker, code);
     });
 
+    // Ensure shards connect when the next queue item is ready
     this.queue.on("execute", (item) => {
       const cluster = this.clusters.get(item.clusterID);
       if (cluster) {
@@ -270,12 +277,7 @@ export class ClusterManager extends EventEmitter {
     const clusterID = this.workers.get(worker.id)!;
     const cluster = this.clusters.get(clusterID)!;
 
-    if (code)
-      this.logger.error(
-        "Cluster Manager",
-        `Cluster ${clusterID} died with code ${code}`
-      );
-
+    this.logger.error("Cluster Manager", `Cluster ${clusterID} died with code ${code}`);
     this.logger.warn("Cluster Manager", `Restarting cluster ${clusterID}...`);
 
     const embed = {
@@ -290,15 +292,15 @@ export class ClusterManager extends EventEmitter {
 
     this.workers.delete(worker.id);
     this.workers.set(newWorker.id, clusterID);
-    this.clusters.set(
-      clusterID,
-      Object.assign(cluster, { workerID: newWorker.id })
-    );
+    this.clusters.set(clusterID, Object.assign(cluster, { workerID: newWorker.id }));
 
-    this.sendTo(clusterID, { eventName: "status", status: "RECONNECTING" });
+    this.sendTo(clusterID, {
+      eventName: "statusUpdate",
+      status: "RECONNECTING"
+    });
+
     this.queue.enqueue({
       clusterID,
-      eventName: "connect",
       token: this.token,
       clusterCount: this.clusterCount as number,
       shardCount: cluster.shardCount,
@@ -319,10 +321,7 @@ export class ClusterManager extends EventEmitter {
       console.log(readFileSync(pathToFile, "utf-8"));
     } catch (error) {
       if (this.printLogoPath)
-        this.logger.warn(
-          "General",
-          `Failed to locate logo file: ${pathToFile}`
-        );
+        this.logger.warn("General", `Failed to locate logo file: ${pathToFile}`);
     }
   }
 
@@ -433,10 +432,7 @@ export class ClusterManager extends EventEmitter {
    * Connects the shards to the discord gateway
    */
   private connectShards() {
-    this.logger.info(
-      "Cluster Manager",
-      "Started all clusters, connecting shards..."
-    );
+    this.logger.info("Cluster Manager", "Started all clusters, connecting shards...");
 
     this.chunkShards();
 
@@ -445,11 +441,13 @@ export class ClusterManager extends EventEmitter {
       const cluster = this.clusters.get(clusterID)!;
 
       if (cluster.shardCount) {
-        this.sendTo(clusterID, { eventName: "status", status: "QUEUED" });
+        this.sendTo(clusterID, {
+          eventName: "statusUpdate",
+          status: "QUEUED"
+        });
 
         this.queue.enqueue({
           clusterID,
-          eventName: "connect",
           token: this.token,
           clusterCount: this.clusterCount as number,
           shardCount: cluster.shardCount,
@@ -471,11 +469,7 @@ export class ClusterManager extends EventEmitter {
     const chunked: number[][] = [];
 
     // Fill the shards array with shard IDs from firstShardID to lastShardID
-    for (
-      let shardID = this.firstShardID;
-      shardID <= this.lastShardID;
-      shardID++
-    )
+    for (let shardID = this.firstShardID; shardID <= this.lastShardID; shardID++)
       shards.push(shardID);
 
     // Split the shards into their clusters
@@ -483,6 +477,7 @@ export class ClusterManager extends EventEmitter {
     let size = 0;
     let i = 0;
 
+    // Split the shards into clusters
     if (shards.length % clusterCount === 0) {
       size = Math.floor(shards.length / clusterCount);
       while (i < shards.length) chunked.push(shards.slice(i, (i += size)));
@@ -519,9 +514,7 @@ export class ClusterManager extends EventEmitter {
 
     if (typeof shardCount === "number") {
       if (shardCount < shards)
-        throw new TypeError(
-          `Invalid \`shardCount\` provided. Recommended: ${shards}`
-        );
+        throw new TypeError(`Invalid \`shardCount\` provided. Recommended: ${shards}`);
       // Provided shardCount is valid
       return Promise.resolve(shardCount);
     }
@@ -560,7 +553,7 @@ export class ClusterManager extends EventEmitter {
     if (!webhook) return;
 
     const { id, token } = webhook;
-    return this.client.executeWebhook(id, token, { embeds: [embed] });
+    return this.client.executeWebhook(id, token, { embeds: [embed] }).catch(() => null);
   }
 }
 

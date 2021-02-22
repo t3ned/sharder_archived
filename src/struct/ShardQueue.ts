@@ -8,9 +8,9 @@ export class ShardQueue extends EventEmitter {
     if (item) this.emit("execute", item);
   }
 
-  public enqueue(item: QueueItem) {
+  public enqueue(item: Omit<QueueItem, "eventName">) {
     const { length } = this.items;
-    this.items.push(item);
+    this.items.push({ ...item, eventName: "connect" });
     if (!length) this.execute();
   }
 
