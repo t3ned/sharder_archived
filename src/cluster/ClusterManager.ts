@@ -7,7 +7,7 @@ import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
 import { cpus } from "os";
 import { readFileSync } from "fs";
 
-import { ConnectionQueue } from "../struct/ConnectionQueue";
+import { ConnectionQueue } from "./ConnectionQueue";
 import { Logger, LoggerOptions } from "@nedbot/logger";
 
 export class ClusterManager extends EventEmitter {
