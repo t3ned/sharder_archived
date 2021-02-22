@@ -40,8 +40,8 @@ export class Cluster {
       this.manager.logger.error(`Cluster ${this.id}`, error);
     });
 
-    process.on("unhandledRejection", (reason) => {
-      this.manager.logger.error(`Cluster ${this.id}`, JSON.stringify(reason));
+    process.on("unhandledRejection", (error: Error) => {
+      this.manager.logger.error(`Cluster ${this.id}`, error);
     });
 
     process.on("message", (message: IPCMessage) => {
