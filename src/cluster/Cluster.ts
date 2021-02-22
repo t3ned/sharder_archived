@@ -241,7 +241,7 @@ export class Cluster {
     client.on("shardResume", (id) => {
       logger.warn(loggerSource, `Shard ${id} reconnected`);
 
-      if (this.status === "DEAD") this.status = "RECONNECTING";
+      if (this.status === "DEAD") this.status = "CONNECTING";
 
       const embed = {
         title: `Shard ${id}`,
@@ -341,13 +341,7 @@ export interface RawCluster {
   lastShardID: number;
 }
 
-export type ClusterStatus =
-  | "IDLE"
-  | "QUEUED"
-  | "CONNECTING"
-  | "RECONNECTING"
-  | "READY"
-  | "DEAD";
+export type ClusterStatus = "IDLE" | "QUEUED" | "CONNECTING" | "READY" | "DEAD";
 
 export interface ClusterStats {
   id: number;

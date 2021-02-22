@@ -294,10 +294,7 @@ export class ClusterManager extends EventEmitter {
     this.workers.set(newWorker.id, clusterID);
     this.clusters.set(clusterID, Object.assign(cluster, { workerID: newWorker.id }));
 
-    this.sendTo(clusterID, {
-      eventName: "statusUpdate",
-      status: "RECONNECTING"
-    });
+    this.sendTo(clusterID, { eventName: "statusUpdate", status: "CONNECTING" });
 
     this.queue.enqueue({
       clusterID,
