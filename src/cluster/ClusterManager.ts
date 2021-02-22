@@ -7,11 +7,11 @@ import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
 import { cpus } from "os";
 import { readFileSync } from "fs";
 
-import { ShardQueue } from "../struct/ShardQueue";
+import { ConnectionQueue } from "../struct/ConnectionQueue";
 import { Logger, LoggerOptions } from "@nedbot/logger";
 
 export class ClusterManager extends EventEmitter {
-  public queue = new ShardQueue();
+  public queue = new ConnectionQueue();
   public clientOptions: ClientOptions;
   public clientBase: typeof Client;
   public client: Client;

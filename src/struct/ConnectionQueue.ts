@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 
-export class ShardQueue extends EventEmitter {
+export class ConnectionQueue extends EventEmitter {
   public items: QueueItem[] = [];
 
   public execute() {
@@ -23,7 +23,7 @@ export class ShardQueue extends EventEmitter {
   }
 }
 
-export interface ShardQueue {
+export interface ConnectionQueue {
   on(event: "execute", listener: (item: QueueItem) => void): any;
 }
 
