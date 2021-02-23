@@ -7,11 +7,11 @@ import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
 import { cpus } from "os";
 import { readFileSync } from "fs";
 
-import { ConnectionQueue } from "./ConnectionQueue";
+import { ClusterQueue } from "./ClusterQueue";
 import { Logger, LoggerOptions } from "@nedbot/logger";
 
 export class ClusterManager extends EventEmitter {
-  public queue = new ConnectionQueue();
+  public queue = new ClusterQueue();
   public clientOptions: ClientOptions;
   public clientBase: typeof Client;
   public client: Client;
@@ -118,7 +118,7 @@ export class ClusterManager extends EventEmitter {
       process.nextTick(async () => {
         this.logger.info("Cluster Manager", "Initialising clusters...");
 
-        // Validate cluster and shard counts
+        // Validate the cluster and shard counts
         this.shardCount = await this.validateShardCount();
         this.clusterCount = this.calculateClusterCount();
         this.lastShardID ||= this.shardCount - 1;
@@ -172,7 +172,7 @@ export class ClusterManager extends EventEmitter {
           this.stats.clusters.push(message.stats);
           this.stats.clustersLaunched++;
 
-          // Emit the stats event if all clusters have sent their stats
+          // Emit the stats' event if all clusters have sent their stats
           if (this.stats.clustersLaunched === this.clusters.size) {
             this.stats.clusters = this.stats.clusters.sort((a, b) => a.id - b.id);
 
@@ -263,7 +263,7 @@ export class ClusterManager extends EventEmitter {
       const cluster = this.clusters.get(item.clusterID);
       if (cluster) {
         const worker = workers[cluster.workerID]!;
-        worker.send(item);
+        worker.send({ ...item, eventName: "connect" });
       }
     });
   }
@@ -325,7 +325,7 @@ export class ClusterManager extends EventEmitter {
   /**
    * Fetches data from the client cache
    * @param start The initial cluster id to start fetching
-   * @param name The type of data to fetch
+   * @param eventName The type of data to fetch
    * @param value The lookup value
    */
   public fetchInfo(start: number, eventName: string, value: string | string[]) {
@@ -354,7 +354,7 @@ export class ClusterManager extends EventEmitter {
 
   /**
    * Sends a message to all clusters
-   * @param start The inital cluster id to start sending
+   * @param start The initial cluster id to start sending
    * @param message The message to send to the cluster
    */
   public broadcast(start: number, message: IPCMessage) {
@@ -401,7 +401,7 @@ export class ClusterManager extends EventEmitter {
   }
 
   /**
-   * Forks a worker and assigns it to a the cluster specified
+   * Forks a worker and assigns it to the cluster passed
    * @param clusterID
    */
   private startCluster(clusterID: number) {
