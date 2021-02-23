@@ -29,6 +29,7 @@ export class ClusterManager extends EventEmitter {
   public guildsPerShard: number;
 
   // Manager cluster values
+  public firstClusterID: number;
   public clusterCount: number | "auto";
   public clusterTimeout: number;
   public shardsPerCluster: number;
@@ -66,6 +67,7 @@ export class ClusterManager extends EventEmitter {
     this.lastShardID = options.lastShardID ?? 0;
     this.guildsPerShard = options.guildsPerShard ?? 1500;
 
+    this.firstClusterID = options.firstClusterID ?? 0;
     this.clusterCount = options.clusterCount || "auto";
     this.clusterTimeout = options.clusterTimeout ?? 5000;
     this.shardsPerCluster = options.shardsPerCluster ?? 0;
@@ -136,8 +138,8 @@ export class ClusterManager extends EventEmitter {
         this.sendWebhook("cluster", embed);
         setupMaster({ silent: false });
 
-        // Start the workers starting from cluster 0
-        this.startCluster(0);
+        // Start the workers starting from the first id
+        this.startCluster(this.firstClusterID);
       });
     } else {
       // Spawn a cluster
@@ -404,7 +406,7 @@ export class ClusterManager extends EventEmitter {
    * @param clusterID
    */
   private startCluster(clusterID: number) {
-    if (clusterID === this.clusterCount) return this.connectShards();
+    if (clusterID - this.firstClusterID === this.clusterCount) return this.connectShards();
 
     // Fork a worker
     const worker = fork();
@@ -433,7 +435,8 @@ export class ClusterManager extends EventEmitter {
     this.chunkShards();
 
     // Queue each cluster for connection
-    for (let clusterID = 0; clusterID < this.clusterCount; clusterID++) {
+    for (let i = 0; i < this.clusterCount; i++) {
+      const clusterID = this.firstClusterID + i;
       const cluster = this.clusters.get(clusterID)!;
 
       if (cluster.shardCount) {
@@ -485,7 +488,8 @@ export class ClusterManager extends EventEmitter {
     }
 
     // Cache the details for each cluster
-    for (const [clusterID, chunk] of chunked.entries()) {
+    for (const [i, chunk] of chunked.entries()) {
+      const clusterID = this.firstClusterID + i;
       const cluster = this.clusters.get(clusterID);
 
       this.clusters.set(
@@ -569,6 +573,7 @@ export interface ClusterManagerOptions {
   lastShardID: number;
   guildsPerShard: number;
 
+  firstClusterID: number;
   clusterCount: number | "auto";
   clusterTimeout: number;
   shardsPerCluster: number;
