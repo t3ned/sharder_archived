@@ -325,7 +325,7 @@ export class Cluster {
    * Fetches the cluster's memory usage
    */
   public get ramUsage() {
-    return process.memoryUsage().rss / 1000000;
+    return process.memoryUsage().heapUsed / 1000000;
   }
 
   /**
