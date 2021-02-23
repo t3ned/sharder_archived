@@ -3,7 +3,6 @@
 .vscode/
 
 # Yarn
-yarn.lock
 yarn-error.log
 
 # Node
