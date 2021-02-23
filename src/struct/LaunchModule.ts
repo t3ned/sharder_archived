@@ -12,8 +12,19 @@ export abstract class LaunchModule {
     this.ipc = client.cluster.ipc;
   }
 
+  /**
+   * Restarts a cluster by its id
+   * @param clusterID The cluster to restart
+   */
   public restartCluster(clusterID: number) {
     this.ipc.sendTo(clusterID, "restart");
+  }
+
+  /**
+   * The launched cluster
+   */
+  public get cluster() {
+    return this.client.cluster;
   }
 
   public abstract launch(): void;

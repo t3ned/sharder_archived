@@ -83,8 +83,7 @@ export class ClusterManager extends EventEmitter {
     this.logger = new Logger(
       options.loggerOptions ?? {
         enableErrorLogs: false,
-        enableInfoLogs: false,
-        logFileDirectory: "logs"
+        enableInfoLogs: false
       }
     );
 
@@ -299,7 +298,7 @@ export class ClusterManager extends EventEmitter {
     this.queue.enqueue({
       clusterID,
       token: this.token,
-      clusterCount: this.clusterCount as number,
+      clusterCount: <number>this.clusterCount,
       shardCount: cluster.shardCount,
       firstShardID: cluster.firstShardID,
       lastShardID: cluster.lastShardID
@@ -395,7 +394,7 @@ export class ClusterManager extends EventEmitter {
         clusters: []
       };
 
-      const clusters = Object.values(workers).filter(Boolean) as Worker[];
+      const clusters = <Worker[]>Object.values(workers).filter(Boolean);
       this.updateStats(clusters, 0);
     }, this.statsUpdateInterval);
   }
@@ -446,7 +445,7 @@ export class ClusterManager extends EventEmitter {
         this.queue.enqueue({
           clusterID,
           token: this.token,
-          clusterCount: this.clusterCount as number,
+          clusterCount: <number>this.clusterCount,
           shardCount: cluster.shardCount,
           firstShardID: cluster.firstShardID,
           lastShardID: cluster.lastShardID
@@ -470,7 +469,7 @@ export class ClusterManager extends EventEmitter {
       shards.push(shardID);
 
     // Split the shards into their clusters
-    let clusterCount = this.clusterCount as number;
+    let clusterCount = <number>this.clusterCount;
     let size = 0;
     let i = 0;
 
@@ -541,7 +540,7 @@ export class ClusterManager extends EventEmitter {
     if (shardsPerCluster === 0) return cpus().length;
 
     // Calculate the total clusters with the configured options
-    const clusterCountDecimal = (shardCount as number) / shardsPerCluster;
+    const clusterCountDecimal = (<number>shardCount) / shardsPerCluster;
     return Math.ceil(clusterCountDecimal);
   }
 

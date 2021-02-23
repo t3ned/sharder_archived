@@ -58,7 +58,7 @@ export class Cluster {
           if (this.shardCount) return this.connect();
           // Move to the next cluster in the queue:
           // We do this to skip connecting this cluster
-          // otherwise the queue will built up and dead
+          // otherwise the queue will build up and dead
           // clusters will not restart
           process.send!({ eventName: "shardsStarted" });
           break;
@@ -170,7 +170,7 @@ export class Cluster {
     Object.defineProperty(this, "client", { value: client });
     this.client.cluster = this;
 
-    // Overwrite default request handler to sync ratelimits
+    // Overwrite default request handler to sync rate-limits
     this.client.requestHandler = new SyncedRequestHandler(client, this.ipc, {
       timeout: this.client.options.requestTimeout ?? 20000
     });
@@ -212,6 +212,8 @@ export class Cluster {
       this.manager.sendWebhook("cluster", embed);
     });
 
+    // When all the shards are ready for this cluster,
+    // load the launch module
     client.once("ready", () => this.launch(client));
 
     client.on("shardDisconnect", (error, id) => {

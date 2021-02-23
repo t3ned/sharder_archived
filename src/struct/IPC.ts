@@ -97,7 +97,7 @@ export class IPC extends EventEmitter {
    * @param id The id of the fetch
    * @private
    */
-  private onFetch<T>(id: string): Promise<T | undefined> {
+  public onFetch<T>(id: string): Promise<T | undefined> {
     return new Promise((resolve) => {
       const callback = (data: T | undefined) => {
         this.off(id, callback);
@@ -116,9 +116,10 @@ export interface Message {
   eventName: string;
   error: APIRequestError;
   data: any;
+  [key: string]: any;
 }
 
-export type IPCMessage = Partial<Message> & Record<string, any>;
+export type IPCMessage = Partial<Message>;
 
 export interface APIRequestError {
   code: number;
