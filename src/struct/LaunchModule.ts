@@ -17,7 +17,7 @@ export abstract class LaunchModule<T extends Client = Client> {
    * @param clusterID The cluster to restart
    */
   public restartCluster(clusterID: number) {
-    this.ipc.sendTo(clusterID, "restart");
+    this.ipc.sendTo(clusterID, "restart", {});
   }
 
   /**
