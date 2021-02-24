@@ -1,11 +1,11 @@
 # IPC
 
-IPC events can be used to communicate data across your clusters. 
+IPC events can be used to communicate data across your clusters.
 We can access the IPC in various ways:
 
-* `LaunchModule#ipc`
-* `Client.requestHandler.ipc`
-* `Client.cluster.ipc`
+- `LaunchModule#ipc`
+- `Client.requestHandler.ipc`
+- `Client.cluster.ipc`
 
 Using the ipc, we can fetch guilds, channels, members and users.
 
@@ -29,7 +29,7 @@ You can register your own IPC events with the `IPC#register` method:
 import { IPCMessage } from "@nedbot/sharder";
 
 ipc.register("hello", ({ data }: IPCMessage<string>) => {
-    console.log(`hello ${data}`);
+  console.log(`hello ${data}`);
 });
 ```
 

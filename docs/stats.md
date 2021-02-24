@@ -1,21 +1,22 @@
 # Stats
 
-The `ClusterManager` emits an event called `stats`. 
+The `ClusterManager` emits an event called `stats`.
 The stats provide information about the cluster and its shards.
-You can use this event to transport the stats to an external api or database/cache. 
+You can use this event to transport the stats to an external api or database/cache.
 
 ```typescript
-manager.on("stats", stats => {
-    console.log(stats);
+manager.on("stats", (stats) => {
+  console.log(stats);
 });
 ```
 
 Clusters can have one of the following statuses:
-* `IDLE` The cluster will never connect because it has no shards
-* `QUEUED` The cluster is waiting for its turn to connect
-* `CONNECTING` The cluster's shards are launching
-* `READY` All the shards under the cluster are ready
-* `DEAD` The cluster died and shows no sign of reconnecting
+
+- `IDLE` The cluster will never connect because it has no shards
+- `QUEUED` The cluster is waiting for its turn to connect
+- `CONNECTING` The cluster's shards are launching
+- `READY` All the shards under the cluster are ready
+- `DEAD` The cluster died and shows no sign of reconnecting
 
 Here's an example of the stats emitted from the event:
 
