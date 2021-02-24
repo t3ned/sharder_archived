@@ -112,7 +112,7 @@ export class IPC extends EventEmitter {
 
 export type Callback = (data: IPCMessage) => void;
 
-export interface Message {
+interface Message {
   eventName: string;
   error: APIRequestError;
   data: any;
