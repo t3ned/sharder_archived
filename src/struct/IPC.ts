@@ -39,7 +39,7 @@ export class IPC extends EventEmitter {
    * @param event The name of the event
    * @param data The message data to send to the clusters
    */
-  public broadcast<T = any>(event: string, data: T) {
+  public broadcast<T = any>(event: string, data?: T) {
     const message: IPCMessage = {
       eventName: event,
       data
@@ -54,7 +54,7 @@ export class IPC extends EventEmitter {
    * @param event The name of the event
    * @param data The message data to send to the cluster
    */
-  public sendTo<T = any>(clusterID: number, event: string, data: T) {
+  public sendTo<T = any>(clusterID: number, event: string, data?: T) {
     const message: IPCMessage = {
       eventName: event,
       data
