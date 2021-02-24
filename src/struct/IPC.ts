@@ -37,10 +37,14 @@ export class IPC extends EventEmitter {
   /**
    * Broadcasts a message to every cluster
    * @param event The name of the event
-   * @param message The message to send to the clusters
+   * @param data The message data to send to the clusters
    */
-  public broadcast(event: string, message: InternalIPCMessage = {}) {
-    message.eventName = event;
+  public broadcast<T = any>(event: string, data: T) {
+    const message: IPCMessage = {
+      eventName: event,
+      data
+    };
+
     process.send!({ eventName: "broadcast", message });
   }
 
@@ -48,10 +52,14 @@ export class IPC extends EventEmitter {
    * Sends a message to a specific cluster
    * @param clusterID The target cluster id
    * @param event The name of the event
-   * @param message The message to send to the cluster
+   * @param data The message data to send to the cluster
    */
-  public sendTo(clusterID: number, event: string, message: InternalIPCMessage = {}) {
-    message.eventName = event;
+  public sendTo<T = any>(clusterID: number, event: string, data: T) {
+    const message: IPCMessage = {
+      eventName: event,
+      data
+    };
+
     process.send!({ eventName: "send", clusterID, message });
   }
 
