@@ -39,7 +39,7 @@ export class IPC extends EventEmitter {
    * @param event The name of the event
    * @param message The message to send to the clusters
    */
-  public broadcast(event: string, message: IPCMessage = {}) {
+  public broadcast(event: string, message: InternalIPCMessage = {}) {
     message.eventName = event;
     process.send!({ eventName: "broadcast", message });
   }
@@ -50,7 +50,7 @@ export class IPC extends EventEmitter {
    * @param event The name of the event
    * @param message The message to send to the cluster
    */
-  public sendTo(clusterID: number, event: string, message: IPCMessage = {}) {
+  public sendTo(clusterID: number, event: string, message: InternalIPCMessage = {}) {
     message.eventName = event;
     process.send!({ eventName: "send", clusterID, message });
   }
@@ -110,19 +110,17 @@ export class IPC extends EventEmitter {
   }
 }
 
-export type Callback = (data: IPCMessage) => void;
-
-interface Message {
-  eventName: string;
-  error: APIRequestError;
-  data: any;
-  [key: string]: any;
-}
-
-export type IPCMessage = Partial<Message>;
-
 export interface APIRequestError {
   code: number;
   message: string;
   stack: string;
 }
+
+interface Message {
+  eventName: string;
+  error: APIRequestError;
+}
+
+export type InternalIPCMessage = Partial<Message> & { [key: string]: any };
+export type IPCMessage<T = any> = Partial<Message> & { data: T };
+export type Callback = (data: IPCMessage) => void;

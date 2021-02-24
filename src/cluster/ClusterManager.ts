@@ -1,4 +1,4 @@
-import type { APIRequestError, IPCMessage } from "../struct/IPC";
+import type { APIRequestError, InternalIPCMessage } from "../struct/IPC";
 import { Client, ClientOptions, EmbedOptions } from "eris";
 import { Cluster, ClusterStats, RawCluster } from "./Cluster";
 
@@ -149,7 +149,7 @@ export class ClusterManager extends EventEmitter {
       cluster.spawn();
     }
 
-    on("message", async (worker, message: IPCMessage) => {
+    on("message", async (worker, message: InternalIPCMessage) => {
       if (!message.eventName) return;
 
       const clusterID = this.workers.get(worker.id)!;
@@ -390,7 +390,7 @@ export class ClusterManager extends EventEmitter {
    * @param start The initial cluster id to start sending
    * @param message The message to send to the cluster
    */
-  public broadcast(start: number, message: IPCMessage) {
+  public broadcast(start: number, message: InternalIPCMessage) {
     const cluster = this.clusters.get(start);
 
     if (cluster) {
@@ -405,7 +405,7 @@ export class ClusterManager extends EventEmitter {
    * @param clusterID The cluster id to send to
    * @param message The message to send to the cluster
    */
-  public sendTo(clusterID: number, message: IPCMessage) {
+  public sendTo(clusterID: number, message: InternalIPCMessage) {
     const cluster = this.clusters.get(clusterID)!;
     const worker = workers[cluster.workerID];
     if (worker) worker.send(message);

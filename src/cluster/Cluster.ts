@@ -2,7 +2,7 @@ import type { Client, Shard } from "eris";
 import type { ClusterManager } from "./ClusterManager";
 import { SyncedRequestHandler } from "../struct/RequestHandler";
 import { LaunchModule } from "../struct/LaunchModule";
-import { IPC, IPCMessage } from "../struct/IPC";
+import { IPC, InternalIPCMessage } from "../struct/IPC";
 
 export class Cluster {
   public client: Client;
@@ -44,7 +44,7 @@ export class Cluster {
       this.manager.logger.error(`Cluster ${this.id}`, error);
     });
 
-    process.on("message", (message: IPCMessage) => {
+    process.on("message", (message: InternalIPCMessage) => {
       if (!message.eventName) return;
 
       switch (message.eventName) {
