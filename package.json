@@ -1,6 +1,6 @@
 {
   "name": "@nedbot/sharder",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "A sharding manager for the Eris Discord API library.",
   "main": "dist/index.js",
   "repository": "https://github.com/NedBot/sharder.git",
