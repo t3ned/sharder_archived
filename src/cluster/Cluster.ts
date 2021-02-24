@@ -295,7 +295,7 @@ export class Cluster {
     this.users = client.users.size;
     this.channels = Object.keys(client.channelGuildMap).length;
     this.uptime = client.uptime;
-    this.voiceConnections = client.voiceConnections.size;
+    this.voiceConnections = client.voiceConnections?.size ?? 0;
 
     this.shardStats = client.shards.map((shard) => ({
       id: shard.id,

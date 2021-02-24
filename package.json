@@ -21,7 +21,9 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@nedbot/logger": "^1.0.1",
+    "@nedbot/logger": "^1.0.1"
+  },
+  "peerDependencies": {
     "eris": "^0.14.0"
   },
   "devDependencies": {
