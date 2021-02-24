@@ -270,6 +270,13 @@ export class ClusterManager extends EventEmitter {
   }
 
   /**
+   * Returns true if the process is the master process
+   */
+  public isMaster() {
+    return isMaster;
+  }
+
+  /**
    * Restarts a cluster
    * @param worker The worker to restart
    * @param code The reason for exiting
