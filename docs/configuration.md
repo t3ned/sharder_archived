@@ -42,23 +42,22 @@ const manager = new ClusterManager("Your discord token", "dist/main.js", {
 
 ### Cluster Manager Options
 
-|       Option        |        Type        |   Default   |                                                    Description                                                    |
-| :-----------------: | :----------------: | :---------: | :---------------------------------------------------------------------------------------------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-|       client        | typeof Eris.Client | Eris.Client |                               The base client to initialise and connect to Discord                                |
-|    clientOptions    | Eris.ClientOptions |     {}      |                                      The client options passed to the client                                      |
-|    loggerOptions    |   LoggerOptions    |     {}      |                                         The options passed to the logger                                          |
-|      webhooks       |      Webhooks      |     {}      |                                      The configuration for Discord webhooks                                       |
-|        debug        |      boolean       |    false    |                                           Whether to log debug messages                                           |
-|     shardCount      |       number       |   "auto"    |                                                      "auto"                                                       | The total number of shards to spawn                                                                                                            |
-|    firstShardID     |       number       |      0      |                                             The first shard to spawn                                              |
-|     lastShardID     |       number       |      0      |                                              The last shard to spawn                                              |
-|   guildsPerShard    |       number       |    1500     |                                            The total guilds per shard                                             |
-|   firstClusterID    |       number       |      0      |              The initial cluster to spawn. Useful for large bots that use multiple physical servers               |
-|    clusterCount     |       number       |   "auto"    |                                                      "auto"                                                       | The total number of clusters to spawn. When set to "auto", the count will be calculated based off `options.shardsPerCluster` or CPU core count |
-|   clusterTimeout    |       number       |    5000     |                        The time in milliseconds to wait before launching the next cluster                         |
-|  shardsPerCluster   |       number       |      0      | The amount of shards assigned to each cluster. The shards are spread evenly between all the clusters if set to 0. |
-| statsUpdateInterval |       number       |      0      |               The time in milliseconds to emit the stats event. Stats will be disabled if set to 0.               |
-|    printLogoPath    |       string       |     ""      |          The path to a text file that contains text which is printed when the app starts, i.e. ascii art          |
+|       Option        |        Type        |   Default   |                                                                  Description                                                                   |
+| :-----------------: | :----------------: | :---------: | :--------------------------------------------------------------------------------------------------------------------------------------------: |
+|       client        | typeof Eris.Client | Eris.Client |                                              The base client to initialise and connect to Discord                                              |
+|    clientOptions    | Eris.ClientOptions |     {}      |                                                    The client options passed to the client                                                     |
+|    loggerOptions    |   LoggerOptions    |     {}      |                                                        The options passed to the logger                                                        |
+|      webhooks       |      Webhooks      |     {}      |                                                     The configuration for Discord webhooks                                                     |
+|     shardCount      |  number \| "auto"  |   "auto"    |                                                      The total number of shards to spawn                                                       |
+|    firstShardID     |       number       |      0      |                                                            The first shard to spawn                                                            |
+|     lastShardID     |       number       |      0      |                                                            The last shard to spawn                                                             |
+|   guildsPerShard    |       number       |    1500     |                                                           The total guilds per shard                                                           |
+|   firstClusterID    |       number       |      0      |                             The initial cluster to spawn. Useful for large bots that use multiple physical servers                             |
+|    clusterCount     |  number \| "auto"  |   "auto"    | The total number of clusters to spawn. When set to "auto", the count will be calculated based off `options.shardsPerCluster` or CPU core count |
+|   clusterTimeout    |       number       |    5000     |                                       The time in milliseconds to wait before launching the next cluster                                       |
+|  shardsPerCluster   |       number       |      0      |               The amount of shards assigned to each cluster. The shards are spread evenly between all the clusters if set to 0.                |
+| statsUpdateInterval |       number       |      0      |                             The time in milliseconds to emit the stats event. Stats will be disabled if set to 0.                              |
+|    printLogoPath    |       string       |     ""      |                        The path to a text file that contains text which is printed when the app starts, i.e. ascii art                         |
 
 ### Logger Options
 
