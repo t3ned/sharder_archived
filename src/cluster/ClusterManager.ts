@@ -21,6 +21,7 @@ export class ClusterManager extends EventEmitter {
   public printLogoPath: string;
   public launchModulePath: string;
   public webhooks: Webhooks;
+  public debug: boolean;
 
   // Manager shard values
   public shardCount: number | "auto";
@@ -60,6 +61,7 @@ export class ClusterManager extends EventEmitter {
     this.clientBase = options.client ?? Client;
     this.printLogoPath = options.printLogoPath ?? "";
     this.launchModulePath = launchModulePath;
+    this.debug = options.debug ?? false;
 
     // Assign default values to missing config props
     this.shardCount = options.shardCount ?? "auto";
@@ -153,6 +155,29 @@ export class ClusterManager extends EventEmitter {
       const clusterID = this.workers.get(worker.id)!;
 
       switch (message.eventName) {
+        case "log":
+          this.logger.info(`Cluster ${clusterID}`, `${message.message}`);
+          break;
+
+        case "debug":
+          if (this.debug) {
+            this.logger.debug(`Cluster ${clusterID}`, `${message.message}`);
+          }
+          break;
+
+        case "info":
+          this.logger.info(`Cluster ${clusterID}`, `${message.message}`);
+          break;
+
+        case "warn":
+
+          this.logger.warn(`Cluster ${clusterID}`, `${message.message}`);
+          break;
+
+        case "error":
+          this.logger.error(`Cluster ${clusterID}`, `${message.message}`);
+          break;
+
         case "shardsStarted":
           // All shards from the previous cluster have started
           // so move to the next cluster in the queue
@@ -574,6 +599,7 @@ export interface ClusterManagerOptions {
   clientOptions: ClientOptions;
   loggerOptions: Partial<LoggerOptions>;
   webhooks: Webhooks;
+  debug: boolean;
 
   shardCount: number | "auto";
   firstShardID: number;
