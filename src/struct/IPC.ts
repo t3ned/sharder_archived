@@ -1,4 +1,4 @@
-import type { Guild, AnyChannel, User, Member } from "eris";
+import type { JSONCache } from "eris";
 import { EventEmitter } from "events";
 
 export class IPC extends EventEmitter {
@@ -69,7 +69,7 @@ export class IPC extends EventEmitter {
    */
   public fetchGuild(id: string) {
     process.send!({ eventName: "fetchGuild", id });
-    return this.onFetch<Guild>(id);
+    return this.onFetch(id);
   }
 
   /**
@@ -78,7 +78,7 @@ export class IPC extends EventEmitter {
    */
   public fetchChannel(id: string) {
     process.send!({ eventName: "fetchChannel", id });
-    return this.onFetch<AnyChannel>(id);
+    return this.onFetch(id);
   }
 
   /**
@@ -87,7 +87,7 @@ export class IPC extends EventEmitter {
    */
   public fetchUser(id: string) {
     process.send!({ eventName: "fetchUser", id });
-    return this.onFetch<User>(id);
+    return this.onFetch(id);
   }
 
   /**
@@ -97,7 +97,7 @@ export class IPC extends EventEmitter {
    */
   public fetchMember(guildID: string, id: string) {
     process.send!({ eventName: "fetchMember", guildID, id });
-    return this.onFetch<Member>(id);
+    return this.onFetch(id);
   }
 
   /**
@@ -105,9 +105,9 @@ export class IPC extends EventEmitter {
    * @param id The id of the fetch
    * @private
    */
-  public onFetch<T>(id: string): Promise<T | undefined> {
+  public onFetch(id: string): Promise<JSONCache | undefined> {
     return new Promise((resolve) => {
-      const callback = (data: T | undefined) => {
+      const callback = (data: JSONCache | undefined) => {
         this.off(id, callback);
         resolve(data);
       };
