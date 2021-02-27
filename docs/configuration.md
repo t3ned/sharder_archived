@@ -56,6 +56,7 @@ const manager = new ClusterManager("Your discord token", "dist/main.js", {
 |    clusterCount     |  number \| "auto"  |   "auto"    | The total number of clusters to spawn. When set to "auto", the count will be calculated based off `options.shardsPerCluster` or CPU core count |
 |   clusterTimeout    |       number       |    5000     |                                       The time in milliseconds to wait before launching the next cluster                                       |
 |  shardsPerCluster   |       number       |      0      |               The amount of shards assigned to each cluster. The shards are spread evenly between all the clusters if set to 0.                |
+|     ipcTimeout      |       number       |    30000    |                                         The time in milliseconds an ipc event is considered timed out                                          |
 | statsUpdateInterval |       number       |      0      |                             The time in milliseconds to emit the stats event. Stats will be disabled if set to 0.                              |
 |    printLogoPath    |       string       |     ""      |                        The path to a text file that contains text which is printed when the app starts, i.e. ascii art                         |
 
