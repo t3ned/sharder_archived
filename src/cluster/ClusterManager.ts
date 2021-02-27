@@ -34,6 +34,7 @@ export class ClusterManager extends EventEmitter {
   public clusterCount: number | "auto";
   public clusterTimeout: number;
   public shardsPerCluster: number;
+  public ipcTimeout: number;
 
   // Manager stats values
   public statsUpdateInterval: number;
@@ -73,6 +74,7 @@ export class ClusterManager extends EventEmitter {
     this.clusterCount = options.clusterCount || "auto";
     this.clusterTimeout = options.clusterTimeout ?? 5000;
     this.shardsPerCluster = options.shardsPerCluster ?? 0;
+    this.ipcTimeout = options.ipcTimeout ?? 30000;
 
     this.statsUpdateInterval = options.statsUpdateInterval ?? 0;
 
@@ -170,7 +172,6 @@ export class ClusterManager extends EventEmitter {
           break;
 
         case "warn":
-
           this.logger.warn(`Cluster ${clusterID}`, `${message.message}`);
           break;
 
@@ -438,7 +439,8 @@ export class ClusterManager extends EventEmitter {
    * @param clusterID
    */
   private startCluster(clusterID: number) {
-    if (clusterID - this.firstClusterID === this.clusterCount) return this.connectShards();
+    if (clusterID - this.firstClusterID === this.clusterCount)
+      return this.connectShards();
 
     // Fork a worker
     const worker = fork();
@@ -576,7 +578,7 @@ export class ClusterManager extends EventEmitter {
     if (shardsPerCluster === 0) return cpus().length;
 
     // Calculate the total clusters with the configured options
-    const clusterCountDecimal = (<number>shardCount) / shardsPerCluster;
+    const clusterCountDecimal = <number>shardCount / shardsPerCluster;
     return Math.ceil(clusterCountDecimal);
   }
 
@@ -610,6 +612,7 @@ export interface ClusterManagerOptions {
   clusterCount: number | "auto";
   clusterTimeout: number;
   shardsPerCluster: number;
+  ipcTimeout: number;
 
   statsUpdateInterval: number;
   printLogoPath: string;

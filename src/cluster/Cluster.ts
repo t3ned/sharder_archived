@@ -7,7 +7,7 @@ import { IPC, InternalIPCMessage } from "../struct/IPC";
 export class Cluster {
   public client: Client;
   public manager: ClusterManager;
-  public ipc = new IPC();
+  public ipc: IPC;
 
   public id = -1;
   public status: ClusterStatus = "IDLE";
@@ -29,6 +29,7 @@ export class Cluster {
 
   public constructor(manager: ClusterManager) {
     Object.defineProperty(this, "manager", { value: manager });
+    this.ipc = new IPC(manager.ipcTimeout);
   }
 
   /**

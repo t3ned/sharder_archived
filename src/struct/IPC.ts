@@ -3,12 +3,9 @@ import { EventEmitter } from "events";
 
 export class IPC extends EventEmitter {
   public events = new Map<string, Callback>();
-  public timeout: number;
 
-  public constructor(timeout = 5000) {
+  public constructor(public timeout = 15000) {
     super();
-
-    this.timeout = timeout;
 
     process.on("message", (message: IPCMessage) => {
       if (!message.eventName) return;
