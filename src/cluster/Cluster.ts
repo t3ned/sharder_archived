@@ -315,8 +315,8 @@ export class Cluster {
    * Fetches the cluster's average shard latency
    */
   public get latency() {
-    if (!this.shardCount) return 0;
-    return this.shardStats.reduce((a, b) => a + b.latency, 0) / this.shardCount;
+    const total = this.shardStats.reduce((a, b) => a + b.latency, 0);
+    return this.shardCount ? total / this.shardCount : 0;
   }
 
   /**
