@@ -170,9 +170,7 @@ export class Cluster {
     this.client.cluster = this;
 
     // Overwrite default request handler to sync rate-limits
-    this.client.requestHandler = new SyncedRequestHandler(client, this.ipc, {
-      timeout: this.client.options.requestTimeout ?? 20000
-    });
+    this.client.requestHandler = new SyncedRequestHandler(client, this.ipc);
 
     // Start emitting stats
     this.startStatsUpdate(client);

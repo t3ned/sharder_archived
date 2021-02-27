@@ -6,10 +6,10 @@ export class SyncedRequestHandler extends RequestHandler {
   public ipc: IPC;
   public timeout: number;
 
-  public constructor(client: Client, ipc: IPC, options: RequestHandlerOptions) {
+  public constructor(client: Client, ipc: IPC) {
     super(client);
+    this.timeout = client.options.requestTimeout ?? 30000;
     this.ipc = ipc;
-    this.timeout = options.timeout;
   }
 
   public request(
@@ -63,10 +63,6 @@ export class SyncedRequestHandler extends RequestHandler {
       });
     });
   }
-}
-
-export interface RequestHandlerOptions {
-  timeout: number;
 }
 
 export interface RequestBody {
