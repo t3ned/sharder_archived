@@ -550,7 +550,7 @@ export class ClusterManager extends EventEmitter {
       if (shardCount < shards)
         throw new TypeError(`Invalid \`shardCount\` provided. Recommended: ${shards}`);
       // Provided shardCount is valid
-      return Promise.resolve(shardCount);
+      return shardCount;
     }
 
     // Calculate the total shards when shardCount is set to auto
