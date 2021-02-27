@@ -21,7 +21,6 @@ export class Cluster {
   public guilds = 0;
   public users = 0;
   public channels = 0;
-  public uptime = 0;
   public voiceConnections = 0;
   public shardStats: ShardStats[] = [];
 
@@ -294,7 +293,6 @@ export class Cluster {
     this.guilds = client.guilds.size;
     this.users = client.users.size;
     this.channels = Object.keys(client.channelGuildMap).length;
-    this.uptime = client.uptime;
     this.voiceConnections = client.voiceConnections?.size ?? 0;
 
     this.shardStats = client.shards.map((shard) => ({
@@ -326,6 +324,13 @@ export class Cluster {
    */
   public get ramUsage() {
     return process.memoryUsage().heapUsed / 1000000;
+  }
+
+  /**
+   * Fetches the update of the cluster
+   */
+  public get uptime() {
+    return process.uptime() * 1000;
   }
 
   /**
