@@ -225,7 +225,7 @@ export class Cluster {
 
       this.manager.sendWebhook("shard", embed);
 
-      if (this.allShardsDisconnected) {
+      if (this.dead) {
         this.status = "DEAD";
 
         const embed = {
@@ -335,7 +335,7 @@ export class Cluster {
   /**
    * Returns true if all the shards have disconnected
    */
-  private get allShardsDisconnected() {
+  private get dead() {
     return this.client.shards.every((x) => x.status === "disconnected");
   }
 }
