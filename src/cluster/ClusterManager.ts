@@ -587,7 +587,7 @@ export class ClusterManager extends EventEmitter {
     if (!webhook) return;
 
     const { id, token } = webhook;
-    return this.client.executeWebhook(id, token, { embeds: [embed] }).catch(() => null);
+    return this.client.executeWebhook(id, token, { embeds: [embed] });
   }
 }
 
