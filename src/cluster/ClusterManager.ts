@@ -307,7 +307,7 @@ export class ClusterManager extends EventEmitter {
    * @param worker The worker to restart
    * @param code The reason for exiting
    */
-  public restartCluster(worker: Worker, code = 1) {
+  private restartCluster(worker: Worker, code = 1) {
     const clusterID = this.workers.get(worker.id)!;
     const cluster = this.clusters.get(clusterID)!;
 
