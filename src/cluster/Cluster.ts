@@ -264,6 +264,14 @@ export class Cluster {
   }
 
   /**
+   * Restarts a cluster, defaults to the current cluster
+   * @param clusterID The cluster to restart
+   */
+  public restart(clusterID: number = this.id) {
+    this.ipc.sendTo(clusterID, "restart");
+  }
+
+  /**
    * Loads the configured LaunchModule when the cluster is ready
    * @param client The ready client
    */
