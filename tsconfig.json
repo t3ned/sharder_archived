@@ -1,25 +1,26 @@
 {
   "compilerOptions": {
-    "target": "es6",
+    "target": "ESNext",
     "module": "commonjs",
-    "outDir": "./dist",
-    "declarationDir": "dist/types",
-    "moduleResolution": "node",
-
+    "outDir": "dist",
     "declaration": true,
-    "removeComments": true,
+    "declarationDir": "dist/types",
+    "removeComments": false,
+    "strict": true,
     "noImplicitAny": true,
-    "strictNullChecks": true,
     "strictFunctionTypes": true,
     "noImplicitThis": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "allowSyntheticDefaultImports": false,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "experimentalDecorators": true
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
   },
-  "exclude": ["node_modules"],
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }
