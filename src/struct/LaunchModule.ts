@@ -2,7 +2,7 @@ import type { Client } from "eris";
 import type { IPC } from "./IPC";
 
 export abstract class LaunchModule<T extends Client = Client> {
-  public client: T;
+  public client!: T;
   public clusterID: number;
   public ipc: IPC;
 
