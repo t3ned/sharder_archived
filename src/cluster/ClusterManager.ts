@@ -8,6 +8,7 @@ import { readFileSync } from "fs";
 
 import { ClusterQueue } from "./ClusterQueue";
 import { ILogger, Logger } from "../struct/Logger";
+import { join } from "path";
 
 export class ClusterManager extends EventEmitter {
   public queue = new ClusterQueue();
@@ -38,7 +39,7 @@ export class ClusterManager extends EventEmitter {
     options.logger = options.logger ?? new Logger();
     options.clientBase = options.clientBase ?? Client;
     options.clientOptions = options.clientOptions ?? {};
-    options.printLogoPath = options.printLogoPath ?? "";
+    options.startUpLogoPath = options.startUpLogoPath ?? "";
     options.launchModulePath = options.launchModulePath ?? "";
     options.debugMode = options.debugMode ?? false;
 
@@ -82,14 +83,16 @@ export class ClusterManager extends EventEmitter {
    */
   public launch() {
     if (cluster.isMaster) {
-      this.printLogo();
-
-      process.on("uncaughtException", (error) => {
-        this.logger.error("Cluster Manager", error);
-      });
+      process.on("uncaughtException", this.handleException.bind(this));
+      process.on("unhandledRejection", this.handleRejection.bind(this));
 
       process.nextTick(async () => {
-        this.logger.info("Cluster Manager", "Initialising clusters...");
+        console.clear();
+
+        const logo = this.getStartUpLogo();
+        if (logo) console.log(`${logo}\n`);
+
+        this.logger.info("Initialising clusters...");
 
         // TODO - Run cluster strategy
 
@@ -290,22 +293,6 @@ export class ClusterManager extends EventEmitter {
     //   firstShardID: cluster.firstShardID,
     //   lastShardID: cluster.lastShardID
     // });
-  }
-
-  /**
-   * Read and print the logo from the file
-   */
-  private printLogo() {
-    const rootPath = process.cwd().replace(`\\`, "/");
-    const pathToFile = `${rootPath}/${this.options.printLogoPath}`;
-
-    try {
-      console.clear();
-      console.log(readFileSync(pathToFile, "utf-8"));
-    } catch (error) {
-      if (this.options.printLogoPath)
-        this.logger.warn("General", `Failed to locate logo file: ${pathToFile}`);
-    }
   }
 
   /**
@@ -541,6 +528,44 @@ export class ClusterManager extends EventEmitter {
     const { id, token } = webhook;
     return this.restClient.executeWebhook(id, token, { embeds: [embed] });
   }
+
+  /**
+   * Resolves the logo print into a string from the file path.
+   * @returns The logo to print
+   */
+  private getStartUpLogo(): string | null {
+    const path = join(process.cwd(), this.options.startUpLogoPath);
+
+    try {
+      const logo = readFileSync(path, "utf-8");
+      if (logo && logo.length > 0) return logo;
+      return null;
+    } catch (error) {
+      if (this.options.startUpLogoPath) {
+        this.logger.error(`Failed to locate logo file: ${path}`);
+        process.exit(1);
+      }
+
+      return null;
+    }
+  }
+
+  /**
+   * Handles an unhandled exception.
+   * @param error The error
+   */
+  private handleException(error: Error): void {
+    this.logger.error(error);
+  }
+
+  /**
+   * Handles unhandled promise rejections.
+   * @param reason The reason why the promise was rejected
+   * @param p The promise
+   */
+  private handleRejection(reason: Error, p: Promise<any>): void {
+    this.logger.error("Unhandled rejection at Promise:", p, "reason:", reason);
+  }
 }
 
 export interface ClusterManager {
@@ -552,7 +577,7 @@ export interface ClusterManagerOptions {
   logger: ILogger;
   clientBase: typeof Client;
   clientOptions: ClientOptions;
-  printLogoPath: string;
+  startUpLogoPath: string;
   launchModulePath: string;
   debugMode: boolean;
 
