@@ -1,6 +1,12 @@
+import {
+  IClusterStrategy,
+  IConnectStrategy,
+  sharedClusterStrategy,
+  orderedConnectStrategy
+} from "../struct/Strategy";
 import type { APIRequestError, InternalIPCMessage } from "../struct/IPC";
 import { Client, ClientOptions, EmbedOptions } from "eris";
-import { Cluster, ClusterStats, RawCluster } from "./Cluster";
+import { Cluster, ClusterConfig, ClusterStats, RawCluster } from "./Cluster";
 
 import { EventEmitter } from "events";
 import cluster, { Worker } from "cluster";
@@ -8,7 +14,7 @@ import { readFileSync } from "fs";
 
 import { ClusterQueue } from "./ClusterQueue";
 import { ILogger, Logger } from "../struct/Logger";
-import { IClusterStrategy, IConnectionStrategy } from "../struct/Strategy";
+
 import { join } from "path";
 
 export class ClusterManager extends EventEmitter {
@@ -18,7 +24,7 @@ export class ClusterManager extends EventEmitter {
   public logger: ILogger;
 
   public clusterStrategy!: IClusterStrategy;
-  public connectionStrategy!: IConnectionStrategy;
+  public connectStrategy!: IConnectStrategy;
 
   public token!: string;
   public clientBase: typeof Client;
@@ -31,6 +37,8 @@ export class ClusterManager extends EventEmitter {
   public clusters = new Map<number, RawCluster>();
   public workers = new Map<number, number>();
   public callbacks = new Map<string, number>();
+
+  #clusters: ClusterConfig[] = [];
 
   public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
     super({});
@@ -80,6 +88,10 @@ export class ClusterManager extends EventEmitter {
       voiceConnections: 0,
       clusters: []
     };
+
+    // Default strategies
+    this.setClusterStrategy(sharedClusterStrategy());
+    this.setConnectStrategy(orderedConnectStrategy());
   }
 
   /**
@@ -97,9 +109,40 @@ export class ClusterManager extends EventEmitter {
    * @param strategy The strategy to set
    * @returns The manager
    */
-  public setConnectionStrategy(strategy: IConnectionStrategy) {
-    this.connectionStrategy = strategy;
+  public setConnectStrategy(strategy: IConnectStrategy) {
+    this.connectStrategy = strategy;
     return this;
+  }
+
+  /**
+   * Adds a cluster config to the clusters to launch.
+   * @param config The config options for the cluster
+   * @returns The manager
+   */
+  public addCluster(config: ClusterConfig) {
+    if (this.getCluster(config.id)) throw new Error("Clusters cannot have the same ID.");
+    this.#clusters.push(config);
+    return this;
+  }
+
+  /**
+   * Removes a cluster config from the clusters to launch.
+   * @param id The id of the cluster to remove
+   * @returns The manager
+   */
+  public removeCluster(id: number) {
+    const index = this.#clusters.findIndex((x) => x.id === id);
+    if (index !== -1) this.#clusters.splice(index, 1);
+    return this;
+  }
+
+  /**
+   * Gets the cluster config from cluster id.
+   * @param id The id of the cluster
+   * @returns The cluster config
+   */
+  public getCluster(id: number) {
+    return this.#clusters.find((x) => x.id === id);
   }
 
   /**
@@ -117,15 +160,25 @@ export class ClusterManager extends EventEmitter {
         if (logo) console.log(`${logo}\n`);
 
         this.logger.info("Initialising clusters...");
+        this.logger.info(`Configuring using the '${this.clusterStrategy.name}' strategy`);
 
-        // TODO - Run cluster strategy
+        await this.clusterStrategy.run(this);
+
+        if (!this.#clusters.length)
+          throw new Error("Cluster strategy failed to produce at least 1 cluster.");
+
+        this.logger.info("Completed configuration for clusters");
 
         cluster.setupMaster({ silent: false });
 
-        // TODO - Run execute strategy
+        this.logger.info(`Connecting using the '${this.connectStrategy.name}' strategy`);
+
+        await this.connectStrategy.run(this, this.#clusters);
+
+        // TODO - Add startCluster method
       });
     } else {
-      // Spawn a cluster
+      // Handle a worker instance
       const cluster = new Cluster(this);
       cluster.spawn();
     }
@@ -572,6 +625,32 @@ export class ClusterManager extends EventEmitter {
 
       return null;
     }
+  }
+
+  /**
+   * Fetches the estimated guild count.
+   * @returns The estimated guild count
+   */
+  public async fetchGuildCount(): Promise<number> {
+    const sessionData = await this.restClient.getBotGateway().catch(() => null);
+    if (!sessionData || !sessionData.shards)
+      throw new Error("Failed to fetch guild count.");
+
+    this.logger.info(`Discord recommended ${sessionData.shards} shards`);
+    return sessionData.shards * 1000;
+  }
+
+  /**
+   * Fetches the recommended number of shards to spawn.
+   * @returns The shard count
+   */
+  public async fetchShardCount(): Promise<number> {
+    const guildCount = await this.fetchGuildCount();
+
+    const { guildsPerShard, shardCountOverride } = this.options;
+
+    const shardCount = Math.ceil(guildCount / guildsPerShard);
+    return Math.max(shardCountOverride, shardCount);
   }
 
   /**
