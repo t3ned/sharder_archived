@@ -1,12 +1,11 @@
 import type { Client, Shard } from "eris";
 import type { ClusterManager } from "./ClusterManager";
-import { SyncedRequestHandler } from "../struct/RequestHandler";
 import { LaunchModule } from "../struct/LaunchModule";
 import { IPC, InternalIPCMessage } from "../struct/IPC";
 
 export class Cluster {
-  public client: Client;
-  public manager: ClusterManager;
+  public client!: Client;
+  public manager!: ClusterManager;
   public ipc: IPC;
 
   public id = -1;
@@ -29,7 +28,7 @@ export class Cluster {
 
   public constructor(manager: ClusterManager) {
     Object.defineProperty(this, "manager", { value: manager });
-    this.ipc = new IPC(manager.ipcTimeout);
+    this.ipc = new IPC(manager.options.ipcTimeout);
   }
 
   /**
@@ -55,7 +54,7 @@ export class Cluster {
           this.shardCount = message.shardCount;
 
           // If this cluster has shards, connect them
-          if (this.shardCount) return this.connect();
+          // if (this.shardCount) return this.connect();
           // Move to the next cluster in the queue:
           // We do this to skip connecting this cluster
           // otherwise the queue will build up and dead
@@ -148,120 +147,120 @@ export class Cluster {
   /**
    * Connects all the shards assigned to this cluster
    */
-  public connect() {
-    const { logger, clientOptions, token, clientBase, shardCount } = this.manager;
+  // public connect() {
+  //   const { logger, clientOptions, token, clientBase, shardCount } = this.manager;
 
-    const loggerSource = `Cluster ${this.id}`;
-    logger.info(loggerSource, `Connecting with ${this.shardCount} shards`);
+  //   const loggerSource = `Cluster ${this.id}`;
+  //   logger.info(loggerSource, `Connecting with ${this.shardCount} shards`);
 
-    this.status = "CONNECTING";
+  //   this.status = "CONNECTING";
 
-    // Overwrite passed clientOptions
-    const options = {
-      ...clientOptions,
-      autoreconnect: true,
-      firstShardID: this.firstShardID,
-      lastShardID: this.lastShardID,
-      maxShards: shardCount
-    };
+  //   // Overwrite passed clientOptions
+  //   const options = {
+  //     ...clientOptions,
+  //     autoreconnect: true,
+  //     firstShardID: this.firstShardID,
+  //     lastShardID: this.lastShardID,
+  //     maxShards: shardCount
+  //   };
 
-    // Initialise the client
-    const client = new clientBase(token, options);
-    Object.defineProperty(this, "client", { value: client });
-    this.client.cluster = this;
+  //   // Initialise the client
+  //   const client = new clientBase(token, options);
+  //   Object.defineProperty(this, "client", { value: client });
+  //   this.client.cluster = this;
 
-    // Overwrite default request handler to sync rate-limits
-    this.client.requestHandler = new SyncedRequestHandler(client, this.ipc);
+  //   // Overwrite default request handler to sync rate-limits
+  //   this.client.requestHandler = new SyncedRequestHandler(client, this.ipc);
 
-    // Start emitting stats
-    this.startStatsUpdate(client);
+  //   // Start emitting stats
+  //   this.startStatsUpdate(client);
 
-    client.on("connect", (id) => {
-      logger.debug(loggerSource, `Shard ${id} established connection`);
-    });
+  //   client.on("connect", (id) => {
+  //     logger.debug(loggerSource, `Shard ${id} established connection`);
+  //   });
 
-    client.on("shardReady", (id) => {
-      logger.debug(loggerSource, `Shard ${id} is ready`);
+  //   client.on("shardReady", (id) => {
+  //     logger.debug(loggerSource, `Shard ${id} is ready`);
 
-      const embed = {
-        title: `Shard ${id}`,
-        description: `Ready!`,
-        color: this.manager.webhooks.colors!.success
-      };
+  //     const embed = {
+  //       title: `Shard ${id}`,
+  //       description: `Ready!`,
+  //       color: this.manager.webhooks.colors!.success
+  //     };
 
-      this.manager.sendWebhook("shard", embed);
-    });
+  //     this.manager.sendWebhook("shard", embed);
+  //   });
 
-    client.on("ready", () => {
-      logger.debug(
-        loggerSource,
-        `Shards ${this.firstShardID} - ${this.lastShardID} are ready`
-      );
+  //   client.on("ready", () => {
+  //     logger.debug(
+  //       loggerSource,
+  //       `Shards ${this.firstShardID} - ${this.lastShardID} are ready`
+  //     );
 
-      this.status = "READY";
+  //     this.status = "READY";
 
-      const embed = {
-        title: `Cluster ${this.id}`,
-        description: `Connected shards ${this.firstShardID} - ${this.lastShardID}`,
-        color: this.manager.webhooks.colors!.success
-      };
+  //     const embed = {
+  //       title: `Cluster ${this.id}`,
+  //       description: `Connected shards ${this.firstShardID} - ${this.lastShardID}`,
+  //       color: this.manager.webhooks.colors!.success
+  //     };
 
-      process.send!({ eventName: "shardsStarted" });
-      this.manager.sendWebhook("cluster", embed);
-    });
+  //     process.send!({ eventName: "shardsStarted" });
+  //     this.manager.sendWebhook("cluster", embed);
+  //   });
 
-    // When all the shards are ready for this cluster,
-    // load the launch module
-    client.once("ready", () => this.launch(client));
+  //   // When all the shards are ready for this cluster,
+  //   // load the launch module
+  //   client.once("ready", () => this.launch(client));
 
-    client.on("shardDisconnect", (error, id) => {
-      logger.error(loggerSource, `Shard ${id} disconnected`, error);
+  //   client.on("shardDisconnect", (error, id) => {
+  //     logger.error(loggerSource, `Shard ${id} disconnected`, error);
 
-      const embed = {
-        title: `Shard ${id}`,
-        description: `Disconnected from the websocket`,
-        color: this.manager.webhooks.colors!.error
-      };
+  //     const embed = {
+  //       title: `Shard ${id}`,
+  //       description: `Disconnected from the websocket`,
+  //       color: this.manager.webhooks.colors!.error
+  //     };
 
-      this.manager.sendWebhook("shard", embed);
+  //     this.manager.sendWebhook("shard", embed);
 
-      if (this.dead) {
-        this.status = "DEAD";
+  //     if (this.dead) {
+  //       this.status = "DEAD";
 
-        const embed = {
-          title: `Cluster ${this.id}`,
-          description: "All shards have disconnected",
-          color: this.manager.webhooks.colors!.error
-        };
+  //       const embed = {
+  //         title: `Cluster ${this.id}`,
+  //         description: "All shards have disconnected",
+  //         color: this.manager.webhooks.colors!.error
+  //       };
 
-        this.manager.sendWebhook("cluster", embed);
-      }
-    });
+  //       this.manager.sendWebhook("cluster", embed);
+  //     }
+  //   });
 
-    client.on("shardResume", (id) => {
-      logger.warn(loggerSource, `Shard ${id} reconnected`);
+  //   client.on("shardResume", (id) => {
+  //     logger.warn(loggerSource, `Shard ${id} reconnected`);
 
-      if (this.status === "DEAD") this.status = "CONNECTING";
+  //     if (this.status === "DEAD") this.status = "CONNECTING";
 
-      const embed = {
-        title: `Shard ${id}`,
-        description: `Successfully reconnected`,
-        color: this.manager.webhooks.colors!.success
-      };
+  //     const embed = {
+  //       title: `Shard ${id}`,
+  //       description: `Successfully reconnected`,
+  //       color: this.manager.webhooks.colors!.success
+  //     };
 
-      this.manager.sendWebhook("shard", embed);
-    });
+  //     this.manager.sendWebhook("shard", embed);
+  //   });
 
-    client.on("error", (error, id) => {
-      logger.error(loggerSource, `Shard ${id} error: ${error.message}`, error);
-    });
+  //   client.on("error", (error, id) => {
+  //     logger.error(loggerSource, `Shard ${id} error: ${error.message}`, error);
+  //   });
 
-    client.on("warn", (message, id) => {
-      logger.warn(loggerSource, `Shard ${id} warning: ${message}`);
-    });
+  //   client.on("warn", (message, id) => {
+  //     logger.warn(loggerSource, `Shard ${id} warning: ${message}`);
+  //   });
 
-    client.connect();
-  }
+  //   client.connect();
+  // }
 
   /**
    * Restarts a cluster, defaults to the current cluster
@@ -275,22 +274,22 @@ export class Cluster {
    * Loads the configured LaunchModule when the cluster is ready
    * @param client The ready client
    */
-  private launch(client: Client) {
-    const rootPath = process.cwd().replace(`\\`, "/");
-    const path = `${rootPath}/${this.manager.launchModulePath}`;
-    let launchModule = require(path);
+  // private launch(client: Client) {
+  //   const rootPath = process.cwd().replace(`\\`, "/");
+  //   const path = `${rootPath}/${this.manager.launchModulePath}`;
+  //   let launchModule = require(path);
 
-    if (launchModule.default !== undefined) launchModule = launchModule.default;
-    if (launchModule.prototype instanceof LaunchModule) {
-      this.launchModule = new launchModule(client);
-      this.launchModule!.launch();
-    } else {
-      this.manager.logger.error(
-        "Cluster Manager",
-        "You must inherit the `LaunchModule` class"
-      );
-    }
-  }
+  //   if (launchModule.default !== undefined) launchModule = launchModule.default;
+  //   if (launchModule.prototype instanceof LaunchModule) {
+  //     this.launchModule = new launchModule(client);
+  //     this.launchModule!.launch();
+  //   } else {
+  //     this.manager.logger.error(
+  //       "Cluster Manager",
+  //       "You must inherit the `LaunchModule` class"
+  //     );
+  //   }
+  // }
 
   /**
    * Sync the client's stats with this cluster
@@ -314,9 +313,9 @@ export class Cluster {
    * Starts the interval to update stats
    * @param client The ready client
    */
-  private startStatsUpdate(client: Client) {
-    setInterval(() => this.updateStats(client), 5000);
-  }
+  // private startStatsUpdate(client: Client) {
+  //   setInterval(() => this.updateStats(client), 5000);
+  // }
 
   /**
    * Fetches the cluster's average shard latency
@@ -343,9 +342,9 @@ export class Cluster {
   /**
    * Returns true if all the shards have disconnected
    */
-  private get dead() {
-    return this.client.shards.every((x) => x.status === "disconnected");
-  }
+  // private get dead() {
+  //   return this.client.shards.every((x) => x.status === "disconnected");
+  // }
 }
 
 export interface RawCluster {
