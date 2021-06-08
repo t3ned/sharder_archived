@@ -3,8 +3,7 @@ import { Client, ClientOptions, EmbedOptions } from "eris";
 import { Cluster, ClusterStats, RawCluster } from "./Cluster";
 
 import { EventEmitter } from "events";
-import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
-import { cpus } from "os";
+import cluster, { Worker } from "cluster";
 import { readFileSync } from "fs";
 
 import { ClusterQueue } from "./ClusterQueue";
@@ -76,16 +75,13 @@ export class ClusterManager extends EventEmitter {
       voiceConnections: 0,
       clusters: []
     };
-
-    // Launch the manager
-    this.launchClusters();
   }
 
   /**
    * Launches all the clusters
    */
-  public launchClusters() {
-    if (isMaster) {
+  public launch() {
+    if (cluster.isMaster) {
       this.printLogo();
 
       process.on("uncaughtException", (error) => {
@@ -95,27 +91,11 @@ export class ClusterManager extends EventEmitter {
       process.nextTick(async () => {
         this.logger.info("Cluster Manager", "Initialising clusters...");
 
-        // Validate the cluster and shard counts
-        this.shardCount = await this.validateShardCount();
-        this.clusterCount = this.calculateClusterCount();
-        this.lastShardID ||= this.shardCount - 1;
+        // TODO - Run cluster strategy
 
-        this.logger.info(
-          "Cluster Manager",
-          `Starting ${this.clusterCount} clusters with ${this.shardCount} shards`
-        );
+        cluster.setupMaster({ silent: false });
 
-        const embed = {
-          title: `Launching ${this.clusterCount} clusters`,
-          description: `Preparing ${this.shardCount} shards`,
-          color: this.webhooks.colors!.success
-        };
-
-        this.sendWebhook("cluster", embed);
-        setupMaster({ silent: false });
-
-        // Start the workers starting from the first id
-        this.startCluster(this.firstClusterID);
+        // TODO - Run execute strategy
       });
     } else {
       // Spawn a cluster
@@ -123,7 +103,7 @@ export class ClusterManager extends EventEmitter {
       cluster.spawn();
     }
 
-    on("message", async (worker, message: InternalIPCMessage) => {
+    cluster.on("message", async (worker, message: InternalIPCMessage) => {
       if (!message.eventName) return;
 
       const clusterID = this.workers.get(worker.id)!;
@@ -134,7 +114,7 @@ export class ClusterManager extends EventEmitter {
           break;
 
         case "debug":
-          if (this.debug) {
+          if (this.options.debugMode) {
             this.logger.debug(`Cluster ${clusterID}`, `${message.message}`);
           }
           break;
@@ -156,7 +136,7 @@ export class ClusterManager extends EventEmitter {
           // so move to the next cluster in the queue
           this.queue.next();
           if (this.queue.length)
-            setTimeout(() => this.queue.execute(), this.clusterTimeout);
+            setTimeout(() => this.queue.execute(), this.options.clusterTimeout);
           break;
 
         case "statsUpdate": {
@@ -196,10 +176,10 @@ export class ClusterManager extends EventEmitter {
         // Send the cached value back to the cluster
         case "fetchReturn":
           const callback = this.callbacks.get(message.value.id)!;
-          const cluster = this.clusters.get(callback);
+          const _cluster = this.clusters.get(callback);
 
-          if (cluster) {
-            workers[cluster.workerID]!.send({
+          if (_cluster) {
+            cluster.workers[_cluster.workerID]!.send({
               eventName: "fetchReturn",
               id: message.value.id,
               value: message.value
@@ -222,7 +202,7 @@ export class ClusterManager extends EventEmitter {
         // Handle api requests sent from the request handler
         case "apiRequest":
           try {
-            const data = await this.client.requestHandler.request(
+            const data = await this.restClient.requestHandler.request(
               message.method,
               message.url,
               message.auth,
@@ -253,15 +233,15 @@ export class ClusterManager extends EventEmitter {
     });
 
     // Restart a cluster if it dies
-    on("exit", (worker, code) => {
+    cluster.on("exit", (worker, code) => {
       this.restartCluster(worker, code);
     });
 
     // Ensure shards connect when the next queue item is ready
     this.queue.on("execute", (item) => {
-      const cluster = this.clusters.get(item.clusterID);
-      if (cluster) {
-        const worker = workers[cluster.workerID]!;
+      const _cluster = this.clusters.get(item.clusterID);
+      if (_cluster) {
+        const worker = cluster.workers[_cluster.workerID]!;
         worker.send({ ...item, eventName: "connect" });
       }
     });
@@ -271,7 +251,7 @@ export class ClusterManager extends EventEmitter {
    * Returns true if the process is the master process
    */
   public isMaster() {
-    return isMaster;
+    return cluster.isMaster;
   }
 
   /**
@@ -281,35 +261,35 @@ export class ClusterManager extends EventEmitter {
    */
   private restartCluster(worker: Worker, code = 1) {
     const clusterID = this.workers.get(worker.id)!;
-    const cluster = this.clusters.get(clusterID)!;
+    const _cluster = this.clusters.get(clusterID)!;
 
     this.logger.error("Cluster Manager", `Cluster ${clusterID} died with code ${code}`);
     this.logger.warn("Cluster Manager", `Restarting cluster ${clusterID}...`);
 
     const embed = {
       title: `Cluster ${clusterID} died with code ${code}`,
-      description: `Restarting shards ${cluster.firstShardID} - ${cluster.lastShardID}`,
+      description: `Restarting shards ${_cluster.firstShardID} - ${_cluster.lastShardID}`,
       color: this.webhooks.colors!.error
     };
 
     this.sendWebhook("cluster", embed);
 
-    const newWorker = fork();
+    const newWorker = cluster.fork();
 
     this.workers.delete(worker.id);
     this.workers.set(newWorker.id, clusterID);
-    this.clusters.set(clusterID, Object.assign(cluster, { workerID: newWorker.id }));
+    this.clusters.set(clusterID, Object.assign(_cluster, { workerID: newWorker.id }));
 
     this.sendTo(clusterID, { eventName: "statusUpdate", status: "QUEUED" });
 
-    this.queue.enqueue({
-      clusterID,
-      token: this.token,
-      clusterCount: <number>this.clusterCount,
-      shardCount: cluster.shardCount,
-      firstShardID: cluster.firstShardID,
-      lastShardID: cluster.lastShardID
-    });
+    // this.queue.enqueue({
+    //   clusterID,
+    //   token: this.token,
+    //   clusterCount: <number>this.clusterCount,
+    //   shardCount: cluster.shardCount,
+    //   firstShardID: cluster.firstShardID,
+    //   lastShardID: cluster.lastShardID
+    // });
   }
 
   /**
@@ -317,13 +297,13 @@ export class ClusterManager extends EventEmitter {
    */
   private printLogo() {
     const rootPath = process.cwd().replace(`\\`, "/");
-    const pathToFile = `${rootPath}/${this.printLogoPath}`;
+    const pathToFile = `${rootPath}/${this.options.printLogoPath}`;
 
     try {
       console.clear();
       console.log(readFileSync(pathToFile, "utf-8"));
     } catch (error) {
-      if (this.printLogoPath)
+      if (this.options.printLogoPath)
         this.logger.warn("General", `Failed to locate logo file: ${pathToFile}`);
     }
   }
@@ -335,10 +315,10 @@ export class ClusterManager extends EventEmitter {
    * @param value The lookup value
    */
   public fetchInfo(start: number, eventName: string, value: string | string[]) {
-    const cluster = this.clusters.get(start);
+    const _cluster = this.clusters.get(start);
 
-    if (cluster) {
-      const worker = workers[cluster.workerID]!;
+    if (_cluster) {
+      const worker = cluster.workers[_cluster.workerID]!;
       worker.send({ eventName, value });
       this.fetchInfo(start + 1, eventName, value);
     }
@@ -364,10 +344,10 @@ export class ClusterManager extends EventEmitter {
    * @param message The message to send to the cluster
    */
   public broadcast(start: number, message: InternalIPCMessage) {
-    const cluster = this.clusters.get(start);
+    const _cluster = this.clusters.get(start);
 
-    if (cluster) {
-      const worker = workers[cluster.workerID]!;
+    if (_cluster) {
+      const worker = cluster.workers[_cluster.workerID]!;
       worker.send(message);
       this.broadcast(++start, message);
     }
@@ -379,187 +359,187 @@ export class ClusterManager extends EventEmitter {
    * @param message The message to send to the cluster
    */
   public sendTo(clusterID: number, message: InternalIPCMessage) {
-    const cluster = this.clusters.get(clusterID)!;
-    const worker = workers[cluster.workerID];
+    const _cluster = this.clusters.get(clusterID)!;
+    const worker = cluster.workers[_cluster.workerID];
     if (worker) worker.send(message);
   }
 
   /**
    * Starts updating the cluster stats
    */
-  private startStatsUpdate() {
-    if (!this.statsUpdateInterval) return;
-    setInterval(() => {
-      this.stats = {
-        shards: 0,
-        clustersLaunched: 0,
-        guilds: 0,
-        users: 0,
-        channels: 0,
-        ramUsage: 0,
-        voiceConnections: 0,
-        clusters: []
-      };
+  // private startStatsUpdate() {
+  //   if (!this.options.statsUpdateInterval) return;
+  //   setInterval(() => {
+  //     this.stats = {
+  //       shards: 0,
+  //       clustersLaunched: 0,
+  //       guilds: 0,
+  //       users: 0,
+  //       channels: 0,
+  //       ramUsage: 0,
+  //       voiceConnections: 0,
+  //       clusters: []
+  //     };
 
-      const clusters = <Worker[]>Object.values(workers).filter(Boolean);
-      this.updateStats(clusters, 0);
-    }, this.statsUpdateInterval);
-  }
+  //     const clusters = <Worker[]>Object.values(cluster.workers).filter(Boolean);
+  //     this.updateStats(clusters, 0);
+  //   }, this.options.statsUpdateInterval);
+  // }
 
   /**
    * Forks a worker and assigns it to the cluster passed
    * @param clusterID
    */
-  private startCluster(clusterID: number) {
-    if (clusterID - this.firstClusterID === this.clusterCount)
-      return this.connectShards();
+  // private startCluster(clusterID: number) {
+  //   if (clusterID - this.firstClusterID === this.clusterCount)
+  //     return this.connectShards();
 
-    // Fork a worker
-    const worker = fork();
+  //   // Fork a worker
+  //   const worker = fork();
 
-    // Cache this worker
-    this.workers.set(worker.id, clusterID);
-    this.clusters.set(clusterID, {
-      workerID: worker.id,
-      shardCount: 0,
-      firstShardID: 0,
-      lastShardID: 0
-    });
+  //   // Cache this worker
+  //   this.workers.set(worker.id, clusterID);
+  //   this.clusters.set(clusterID, {
+  //     workerID: worker.id,
+  //     shardCount: 0,
+  //     firstShardID: 0,
+  //     lastShardID: 0
+  //   });
 
-    this.logger.info("Cluster Manager", `Started cluster ${clusterID}`);
+  //   this.logger.info("Cluster Manager", `Started cluster ${clusterID}`);
 
-    // Start next cluster
-    this.startCluster(++clusterID);
-  }
+  //   // Start next cluster
+  //   this.startCluster(++clusterID);
+  // }
 
   /**
    * Connects the shards to the discord gateway
    */
-  private connectShards() {
-    this.logger.info("Cluster Manager", "Started all clusters, connecting shards...");
+  // private connectShards() {
+  //   this.logger.info("Cluster Manager", "Started all clusters, connecting shards...");
 
-    this.chunkShards();
+  //   this.chunkShards();
 
-    // Queue each cluster for connection
-    for (let i = 0; i < this.clusterCount; i++) {
-      const clusterID = this.firstClusterID + i;
-      const cluster = this.clusters.get(clusterID)!;
+  //   // Queue each cluster for connection
+  //   for (let i = 0; i < this.clusterCount; i++) {
+  //     const clusterID = this.firstClusterID + i;
+  //     const cluster = this.clusters.get(clusterID)!;
 
-      if (cluster.shardCount) {
-        this.sendTo(clusterID, {
-          eventName: "statusUpdate",
-          status: "QUEUED"
-        });
+  //     if (cluster.shardCount) {
+  //       this.sendTo(clusterID, {
+  //         eventName: "statusUpdate",
+  //         status: "QUEUED"
+  //       });
 
-        this.queue.enqueue({
-          clusterID,
-          token: this.token,
-          clusterCount: <number>this.clusterCount,
-          shardCount: cluster.shardCount,
-          firstShardID: cluster.firstShardID,
-          lastShardID: cluster.lastShardID
-        });
-      }
-    }
+  //       this.queue.enqueue({
+  //         clusterID,
+  //         token: this.token,
+  //         clusterCount: <number>this.clusterCount,
+  //         shardCount: cluster.shardCount,
+  //         firstShardID: cluster.firstShardID,
+  //         lastShardID: cluster.lastShardID
+  //       });
+  //     }
+  //   }
 
-    this.logger.info("Cluster Manager", "All shards spread");
-    this.startStatsUpdate();
-  }
+  //   this.logger.info("Cluster Manager", "All shards spread");
+  //   this.startStatsUpdate();
+  // }
 
   /**
    * Splits the shards across all the clusters
    */
-  private chunkShards() {
-    const shards: number[] = [];
-    const chunked: number[][] = [];
+  // private chunkShards() {
+  //   const shards: number[] = [];
+  //   const chunked: number[][] = [];
 
-    // Fill the shards array with shard IDs from firstShardID to lastShardID
-    for (let shardID = this.firstShardID; shardID <= this.lastShardID; shardID++)
-      shards.push(shardID);
+  //   // Fill the shards array with shard IDs from firstShardID to lastShardID
+  //   for (let shardID = this.firstShardID; shardID <= this.lastShardID; shardID++)
+  //     shards.push(shardID);
 
-    // Split the shards into their clusters
-    let clusterCount = <number>this.clusterCount;
-    let size = 0;
-    let i = 0;
+  //   // Split the shards into their clusters
+  //   let clusterCount = <number>this.clusterCount;
+  //   let size = 0;
+  //   let i = 0;
 
-    // Split the shards into clusters
-    if (shards.length % clusterCount === 0) {
-      size = Math.floor(shards.length / clusterCount);
-      while (i < shards.length) chunked.push(shards.slice(i, (i += size)));
-    } else {
-      while (i < shards.length) {
-        size = Math.ceil((shards.length - i) / clusterCount--);
-        chunked.push(shards.slice(i, (i += size)));
-      }
-    }
+  //   // Split the shards into clusters
+  //   if (shards.length % clusterCount === 0) {
+  //     size = Math.floor(shards.length / clusterCount);
+  //     while (i < shards.length) chunked.push(shards.slice(i, (i += size)));
+  //   } else {
+  //     while (i < shards.length) {
+  //       size = Math.ceil((shards.length - i) / clusterCount--);
+  //       chunked.push(shards.slice(i, (i += size)));
+  //     }
+  //   }
 
-    // Cache the details for each cluster
-    for (const [i, chunk] of chunked.entries()) {
-      const clusterID = this.firstClusterID + i;
-      const cluster = this.clusters.get(clusterID);
+  //   // Cache the details for each cluster
+  //   for (const [i, chunk] of chunked.entries()) {
+  //     const clusterID = this.firstClusterID + i;
+  //     const cluster = this.clusters.get(clusterID);
 
-      this.clusters.set(
-        clusterID,
-        Object.assign(cluster, {
-          firstShardID: Math.min(...chunk),
-          lastShardID: Math.max(...chunk),
-          shardCount: chunk.length
-        })
-      );
-    }
+  //     this.clusters.set(
+  //       clusterID,
+  //       Object.assign(cluster, {
+  //         firstShardID: Math.min(...chunk),
+  //         lastShardID: Math.max(...chunk),
+  //         shardCount: chunk.length
+  //       })
+  //     );
+  //   }
 
-    return chunked;
-  }
+  //   return chunked;
+  // }
 
   /**
    * Ensures a valid shardCount is provided
    */
-  private async validateShardCount() {
-    const { shards } = await this.client.getBotGateway();
-    const { shardCount, guildsPerShard } = this;
+  // private async validateShardCount() {
+  //   const { shards } = await this.client.getBotGateway();
+  //   const { shardCount, guildsPerShard } = this;
 
-    if (typeof shardCount === "number") {
-      if (shardCount < shards)
-        throw new TypeError(`Invalid \`shardCount\` provided. Recommended: ${shards}`);
-      // Provided shardCount is valid
-      return shardCount;
-    }
+  //   if (typeof shardCount === "number") {
+  //     if (shardCount < shards)
+  //       throw new TypeError(`Invalid \`shardCount\` provided. Recommended: ${shards}`);
+  //     // Provided shardCount is valid
+  //     return shardCount;
+  //   }
 
-    // Calculate the total shards when shardCount is set to auto
-    const maxPossibleGuildCount = shards * 1000;
-    const shardCountDecimal = maxPossibleGuildCount / guildsPerShard;
-    return Math.ceil(shardCountDecimal);
-  }
+  //   // Calculate the total shards when shardCount is set to auto
+  //   const maxPossibleGuildCount = shards * 1000;
+  //   const shardCountDecimal = maxPossibleGuildCount / guildsPerShard;
+  //   return Math.ceil(shardCountDecimal);
+  // }
 
   /**
    * Calculates the total clusters to launch
    */
-  private calculateClusterCount() {
-    const { clusterCount, shardsPerCluster, shardCount } = this;
+  // private calculateClusterCount() {
+  //   const { clusterCount, shardsPerCluster, shardCount } = this;
 
-    // Provided clusterCount is valid
-    if (typeof clusterCount === "number") {
-      if (shardsPerCluster && clusterCount * shardsPerCluster < shardCount)
-        throw new TypeError(
-          `Invalid \`shardsPerCluster\` provided. \`shardCount\` should be >= \`clusterCount\` * \`shardsPerCluster\``
-        );
-      return clusterCount;
-    }
+  //   // Provided clusterCount is valid
+  //   if (typeof clusterCount === "number") {
+  //     if (shardsPerCluster && clusterCount * shardsPerCluster < shardCount)
+  //       throw new TypeError(
+  //         `Invalid \`shardsPerCluster\` provided. \`shardCount\` should be >= \`clusterCount\` * \`shardsPerCluster\``
+  //       );
+  //     return clusterCount;
+  //   }
 
-    // Use the count of cpus to determine cluster count
-    if (shardsPerCluster === 0) return cpus().length;
+  //   // Use the count of cpus to determine cluster count
+  //   if (shardsPerCluster === 0) return cpus().length;
 
-    // Calculate the total clusters with the configured options
-    const clusterCountDecimal = <number>shardCount / shardsPerCluster;
-    return Math.ceil(clusterCountDecimal);
-  }
+  //   // Calculate the total clusters with the configured options
+  //   const clusterCountDecimal = <number>shardCount / shardsPerCluster;
+  //   return Math.ceil(clusterCountDecimal);
+  // }
 
   public sendWebhook(type: "cluster" | "shard", embed: EmbedOptions) {
     const webhook = this.webhooks[type];
     if (!webhook) return;
 
     const { id, token } = webhook;
-    return this.client.executeWebhook(id, token, { embeds: [embed] });
+    return this.restClient.executeWebhook(id, token, { embeds: [embed] });
   }
 }
 
