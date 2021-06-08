@@ -12,72 +12,52 @@ import { ILogger, Logger } from "../struct/Logger";
 
 export class ClusterManager extends EventEmitter {
   public queue = new ClusterQueue();
-  public clientOptions: ClientOptions;
-  public clientBase: typeof Client;
-  public client: Client;
+
+  public restClient!: Client;
   public logger: ILogger;
 
-  public token: string;
-  public printLogoPath: string;
-  public launchModulePath: string;
+  public token!: string;
+  public clientBase: typeof Client;
+  public clientOptions: ClientOptions;
+  public options: ClusterManagerOptions;
+
   public webhooks: Webhooks;
-  public debug: boolean;
-
-  // Manager shard values
-  public shardCount: number | "auto";
-  public firstShardID: number;
-  public lastShardID: number;
-  public guildsPerShard: number;
-
-  // Manager cluster values
-  public firstClusterID: number;
-  public clusterCount: number | "auto";
-  public clusterTimeout: number;
-  public shardsPerCluster: number;
-  public ipcTimeout: number;
-
-  // Manager stats values
-  public statsUpdateInterval: number;
   public stats: ClusterManagerStats;
 
-  // Loaded worker cache
   public clusters = new Map<number, RawCluster>();
   public workers = new Map<number, number>();
   public callbacks = new Map<string, number>();
 
-  public constructor(
-    token: string,
-    launchModulePath: string,
-    options: Partial<ClusterManagerOptions> = {}
-  ) {
-    super();
+  public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
+    super({});
 
-    // Hide the token when the manager is logged
-    Object.defineProperty(this, "token", { value: token });
-    Object.defineProperty(this, "client", { value: new Client(this.token) });
-    Object.defineProperty(this, "clientOptions", {
-      value: options.clientOptions ?? {}
-    });
+    const restClient = new Client(token, { restMode: true });
 
-    this.logger = options.logger ?? new Logger();
-    this.clientBase = options.client ?? Client;
-    this.printLogoPath = options.printLogoPath ?? "";
-    this.launchModulePath = launchModulePath;
-    this.debug = options.debug ?? false;
+    Reflect.defineProperty(this, "restClient", { value: restClient });
+    Reflect.defineProperty(this, "token", { value: token });
 
-    // Assign default values to missing config props
-    this.shardCount = options.shardCount ?? "auto";
-    this.firstShardID = options.firstShardID ?? 0;
-    this.lastShardID = options.lastShardID ?? 0;
-    this.guildsPerShard = options.guildsPerShard ?? 1500;
+    options.logger = options.logger ?? new Logger();
+    options.clientBase = options.clientBase ?? Client;
+    options.clientOptions = options.clientOptions ?? {};
+    options.printLogoPath = options.printLogoPath ?? "";
+    options.launchModulePath = options.launchModulePath ?? "";
+    options.debugMode = options.debugMode ?? false;
 
-    this.firstClusterID = options.firstClusterID ?? 0;
-    this.clusterCount = options.clusterCount || "auto";
-    this.clusterTimeout = options.clusterTimeout ?? 5000;
-    this.shardsPerCluster = options.shardsPerCluster ?? 0;
-    this.ipcTimeout = options.ipcTimeout ?? 30000;
+    options.shardCountOverride = options.shardCountOverride ?? 0;
+    options.firstShardId = options.firstShardId ?? 0;
+    options.lastShardId = options.lastShardId ?? 0;
+    options.guildsPerShard = options.guildsPerShard ?? 1500;
 
-    this.statsUpdateInterval = options.statsUpdateInterval ?? 0;
+    options.clusterIdOffset = options.clusterIdOffset ?? 0;
+    options.clusterTimeout = options.clusterTimeout ?? 5000;
+    options.ipcTimeout = options.ipcTimeout ?? 15000;
+
+    options.statsUpdateInterval = options.statsUpdateInterval ?? 0;
+
+    this.logger = options.logger;
+    this.clientBase = options.clientBase;
+    this.clientOptions = options.clientOptions;
+    this.options = <ClusterManagerOptions>options;
 
     this.webhooks = {
       cluster: undefined,
@@ -86,15 +66,6 @@ export class ClusterManager extends EventEmitter {
       ...options.webhooks
     };
 
-    // Initialise a logger
-    this.logger = new Logger(
-      options.loggerOptions ?? {
-        enableErrorLogs: false,
-        enableInfoLogs: false
-      }
-    );
-
-    // Initialise the stats
     this.stats = {
       shards: 0,
       clustersLaunched: 0,
@@ -598,25 +569,24 @@ export interface ClusterManager {
 }
 
 export interface ClusterManagerOptions {
-  client: typeof Client;
-  clientOptions: ClientOptions;
   logger: ILogger;
-  webhooks: Webhooks;
-  debug: boolean;
+  clientBase: typeof Client;
+  clientOptions: ClientOptions;
+  printLogoPath: string;
+  launchModulePath: string;
+  debugMode: boolean;
 
-  shardCount: number | "auto";
-  firstShardID: number;
-  lastShardID: number;
+  shardCountOverride: number;
+  firstShardId: number;
+  lastShardId: number;
   guildsPerShard: number;
 
-  firstClusterID: number;
-  clusterCount: number | "auto";
+  clusterIdOffset: number;
   clusterTimeout: number;
-  shardsPerCluster: number;
   ipcTimeout: number;
 
   statsUpdateInterval: number;
-  printLogoPath: string;
+  webhooks: Webhooks;
 }
 
 export interface ClusterManagerStats {
