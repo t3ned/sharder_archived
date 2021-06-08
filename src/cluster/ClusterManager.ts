@@ -8,6 +8,7 @@ import { readFileSync } from "fs";
 
 import { ClusterQueue } from "./ClusterQueue";
 import { ILogger, Logger } from "../struct/Logger";
+import { IClusterStrategy, IConnectionStrategy } from "../struct/Strategy";
 import { join } from "path";
 
 export class ClusterManager extends EventEmitter {
@@ -15,6 +16,9 @@ export class ClusterManager extends EventEmitter {
 
   public restClient!: Client;
   public logger: ILogger;
+
+  public clusterStrategy!: IClusterStrategy;
+  public connectionStrategy!: IConnectionStrategy;
 
   public token!: string;
   public clientBase: typeof Client;
@@ -76,6 +80,26 @@ export class ClusterManager extends EventEmitter {
       voiceConnections: 0,
       clusters: []
     };
+  }
+
+  /**
+   * Sets the strategy to use for configuring clusters.
+   * @param strategy The strategy to set
+   * @returns The manager
+   */
+  public setClusterStrategy(strategy: IClusterStrategy) {
+    this.clusterStrategy = strategy;
+    return this;
+  }
+
+  /**
+   * Sets the strategy to use for connecting clusters.
+   * @param strategy The strategy to set
+   * @returns The manager
+   */
+  public setConnectionStrategy(strategy: IConnectionStrategy) {
+    this.connectionStrategy = strategy;
+    return this;
   }
 
   /**
