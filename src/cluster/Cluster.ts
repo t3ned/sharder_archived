@@ -382,3 +382,10 @@ declare module "eris" {
     cluster: Cluster;
   }
 }
+
+export interface ClusterConfig {
+  id: number;
+  name?: string;
+  firstShardId: number;
+  lastShardId: number;
+}
