@@ -8,14 +8,14 @@ import { cpus } from "os";
 import { readFileSync } from "fs";
 
 import { ClusterQueue } from "./ClusterQueue";
-import { Logger, LoggerOptions } from "@nedbot/logger";
+import { ILogger, Logger } from "../struct/Logger";
 
 export class ClusterManager extends EventEmitter {
   public queue = new ClusterQueue();
   public clientOptions: ClientOptions;
   public clientBase: typeof Client;
   public client: Client;
-  public logger: Logger;
+  public logger: ILogger;
 
   public token: string;
   public printLogoPath: string;
@@ -59,6 +59,7 @@ export class ClusterManager extends EventEmitter {
       value: options.clientOptions ?? {}
     });
 
+    this.logger = options.logger ?? new Logger();
     this.clientBase = options.client ?? Client;
     this.printLogoPath = options.printLogoPath ?? "";
     this.launchModulePath = launchModulePath;
@@ -599,7 +600,7 @@ export interface ClusterManager {
 export interface ClusterManagerOptions {
   client: typeof Client;
   clientOptions: ClientOptions;
-  loggerOptions: Partial<LoggerOptions>;
+  logger: ILogger;
   webhooks: Webhooks;
   debug: boolean;
 
