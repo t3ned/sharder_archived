@@ -21,9 +21,7 @@
     "build": "tsc -b .",
     "format": "npx prettier --write ."
   },
-  "dependencies": {
-    "@nedbot/logger": "^1.0.1"
-  },
+  "dependencies": {},
   "peerDependencies": {
     "eris": "^0.14.0"
   },
