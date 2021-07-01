@@ -5,8 +5,8 @@ import { LaunchModule } from "../struct/LaunchModule";
 import { IPC, InternalIPCMessage } from "../struct/IPC";
 
 export class Cluster {
-  public client: Client;
-  public manager: ClusterManager;
+  public client?: Client;
+  public manager!: ClusterManager;
   public ipc: IPC;
 
   public id = -1;
@@ -168,10 +168,11 @@ export class Cluster {
     // Initialise the client
     const client = new clientBase(token, options);
     Object.defineProperty(this, "client", { value: client });
-    this.client.cluster = this;
+    this.client!.cluster = this;
 
     // Overwrite default request handler to sync rate-limits
-    this.client.requestHandler = new SyncedRequestHandler(client, this.ipc);
+    // TODO - make this optional
+    this.client!.requestHandler = new SyncedRequestHandler(client, this.ipc);
 
     // Start emitting stats
     this.startStatsUpdate(client);
@@ -344,6 +345,7 @@ export class Cluster {
    * Returns true if all the shards have disconnected
    */
   private get dead() {
+    if (!this.client) return true;
     return this.client.shards.every((x) => x.status === "disconnected");
   }
 }
