@@ -206,11 +206,11 @@ export class ClusterManager extends EventEmitter {
 
   /**
    * Gets the cluster config from cluster id.
-   * @param id The id of the cluster
+   * @param id The id or worker id of the cluster
    * @returns The cluster config
    */
   public getCluster(id: number) {
-    return this.#clusters.find((x) => x.id === id);
+    return this.#clusters.find((x) => x.id === id || x.workerId === id);
   }
 
   /**
