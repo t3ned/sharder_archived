@@ -12,12 +12,12 @@ import { Logger, LoggerOptions } from "@nedbot/logger";
 
 export class ClusterManager extends EventEmitter {
   public queue = new ClusterQueue();
-  public clientOptions: ClientOptions;
+  public clientOptions!: ClientOptions;
   public clientBase: typeof Client;
-  public client: Client;
+  public restClient!: Client;
   public logger: Logger;
 
-  public token: string;
+  public token!: string;
   public printLogoPath: string;
   public launchModulePath: string;
   public webhooks: Webhooks;
@@ -54,7 +54,7 @@ export class ClusterManager extends EventEmitter {
 
     // Hide the token when the manager is logged
     Object.defineProperty(this, "token", { value: token });
-    Object.defineProperty(this, "client", { value: new Client(this.token) });
+    Object.defineProperty(this, "restClient", { value: new Client(this.token) });
     Object.defineProperty(this, "clientOptions", {
       value: options.clientOptions ?? {}
     });
@@ -250,7 +250,7 @@ export class ClusterManager extends EventEmitter {
         // Handle api requests sent from the request handler
         case "apiRequest":
           try {
-            const data = await this.client.requestHandler.request(
+            const data = await this.restClient.requestHandler.request(
               message.method,
               message.url,
               message.auth,
@@ -543,7 +543,7 @@ export class ClusterManager extends EventEmitter {
    * Ensures a valid shardCount is provided
    */
   private async validateShardCount() {
-    const { shards } = await this.client.getBotGateway();
+    const { shards } = await this.restClient.getBotGateway();
     const { shardCount, guildsPerShard } = this;
 
     if (typeof shardCount === "number") {
@@ -587,7 +587,7 @@ export class ClusterManager extends EventEmitter {
     if (!webhook) return;
 
     const { id, token } = webhook;
-    return this.client.executeWebhook(id, token, { embeds: [embed] });
+    return this.restClient.executeWebhook(id, token, { embeds: [embed] });
   }
 }
 
