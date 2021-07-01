@@ -1,16 +1,18 @@
-# IDE
+# Dev
 .idea/
 .vscode/
+.git/
+tests/
+.env
 
-# Yarn
-yarn-error.log
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Node
+# Dependencies
 node_modules/
-
-# Tests
-src/tests/
-
-# Build
 dist/
-
+.yarn-integrity

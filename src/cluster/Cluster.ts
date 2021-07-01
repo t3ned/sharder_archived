@@ -4,7 +4,7 @@ import { LaunchModule } from "../struct/LaunchModule";
 import { IPC, InternalIPCMessage } from "../struct/IPC";
 
 export class Cluster {
-  public client!: Client;
+  public client?: Client;
   public manager!: ClusterManager;
   public ipc: IPC;
 
