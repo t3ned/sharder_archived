@@ -18,28 +18,76 @@ import { ILogger, Logger } from "../struct/Logger";
 import { join } from "path";
 
 export class ClusterManager extends EventEmitter {
+  /**
+   * The fifo cluster queue.
+   */
   public queue = new ClusterQueue();
 
+  /**
+   * The client used for API calls.
+   */
   public restClient!: Client;
+
+  /**
+   * The logger used by the manager.
+   */
   public logger: ILogger;
 
+  /**
+   * The strategy the manager should use for spawning clusters.
+   */
   public clusterStrategy!: IClusterStrategy;
+
+  /**
+   * The strategy the manager should use for connecting shards.
+   */
   public connectStrategy!: IConnectStrategy;
 
+  /**
+   * The discord token used for connecting to discord.
+   */
   public token!: string;
+
+  /**
+   * The client constructor that the manager should instantiate.
+   */
   public clientBase: typeof Client;
+
+  /**
+   * The client options passed to the client.
+   */
   public clientOptions: ClientOptions;
+
+  /**
+   * The manager options.
+   */
   public options: ClusterManagerOptions;
 
+  /**
+   * The configuration for the webhooks.
+   */
   public webhooks: Webhooks;
+
+  /**
+   * The stats data for the manager and clusters.
+   */
   public stats: ClusterManagerStats;
 
+  // TODO - remove
   public clusters = new Map<number, RawCluster>();
   public workers = new Map<number, number>();
   public callbacks = new Map<string, number>();
 
+  /**
+   * The configuration for all the clusters.
+   */
+  // TODO - update this to `clusters`
   #clusters: ClusterConfig[] = [];
 
+  /**
+   * @param token The discord token used for connecting to discord.
+   * @param options The options for the manager.
+   */
   public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
     super({});
 
@@ -54,6 +102,8 @@ export class ClusterManager extends EventEmitter {
     options.startUpLogoPath = options.startUpLogoPath ?? "";
     options.launchModulePath = options.launchModulePath ?? "";
     options.debugMode = options.debugMode ?? false;
+    options.useSyncedRequestHandler = options.useSyncedRequestHandler ?? true;
+    options.showStartupStats = options.showStartupStats ?? true;
 
     options.shardCountOverride = options.shardCountOverride ?? 0;
     options.firstShardId = options.firstShardId ?? 0;
@@ -513,6 +563,8 @@ export interface ClusterManagerOptions {
   startUpLogoPath: string;
   launchModulePath: string;
   debugMode: boolean;
+  useSyncedRequestHandler: boolean;
+  showStartupStats: boolean;
 
   shardCountOverride: number;
   firstShardId: number;
