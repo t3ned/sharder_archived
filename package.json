@@ -18,7 +18,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc -b .",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@nedbot/logger": "^1.0.1"
