@@ -9,14 +9,11 @@ import {
 import type { APIRequestError, InternalIPCMessage } from "../struct/IPC";
 import { Client, ClientOptions, EmbedOptions } from "eris";
 import { Cluster, ClusterConfig, ClusterStats, RawCluster } from "./Cluster";
-
 import { EventEmitter } from "events";
 import cluster, { Worker } from "cluster";
 import { readFileSync } from "fs";
-
 import { ClusterQueue } from "./ClusterQueue";
 import { ILogger, Logger } from "../struct/Logger";
-
 import { join } from "path";
 
 export class ClusterManager extends EventEmitter {
@@ -183,6 +180,21 @@ export class ClusterManager extends EventEmitter {
   }
 
   /**
+   * Starts a worker process.
+   * @param clusterId The id of the cluster to start
+   */
+  public startCluster(clusterId: number): void {
+    const clusterConfig = this.getCluster(clusterId);
+    if (!clusterConfig) return;
+
+    const worker = cluster.fork();
+    clusterConfig.workerId = worker.id;
+    this.workers.set(worker.id, clusterId);
+
+    this.logger.info(`Started cluster ${clusterId}`);
+  }
+
+  /**
    * Adds a cluster config to the clusters to launch.
    * @param config The config options for the cluster
    * @returns The manager
@@ -235,15 +247,13 @@ export class ClusterManager extends EventEmitter {
         if (!this.#clusters.length)
           throw new Error("Cluster strategy failed to produce at least 1 cluster.");
 
-        this.logger.info("Completed configuration for clusters");
+        this.logger.info("Finished starting clusters");
 
         cluster.setupMaster({ silent: false });
 
         this.logger.info(`Connecting using the '${this.connectStrategy.name}' strategy`);
 
         await this.connectStrategy.run(this, this.#clusters);
-
-        // TODO - Add startCluster method
       });
     } else {
       // Handle a worker instance
