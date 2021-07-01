@@ -1,8 +1,10 @@
 import {
   IClusterStrategy,
   IConnectStrategy,
+  IReconnectStrategy,
   sharedClusterStrategy,
-  orderedConnectStrategy
+  orderedConnectStrategy,
+  queuedReconnectStrategy
 } from "../struct/Strategy";
 import type { APIRequestError, InternalIPCMessage } from "../struct/IPC";
 import { Client, ClientOptions, EmbedOptions } from "eris";
@@ -42,6 +44,11 @@ export class ClusterManager extends EventEmitter {
    * The strategy the manager should use for connecting shards.
    */
   public connectStrategy!: IConnectStrategy;
+
+  /**
+   * The strategy the manager should use for reconnecting shards.
+   */
+  public reconnectStrategy!: IReconnectStrategy;
 
   /**
    * The discord token used for connecting to discord.
@@ -142,6 +149,7 @@ export class ClusterManager extends EventEmitter {
     // Default strategies
     this.setClusterStrategy(sharedClusterStrategy());
     this.setConnectStrategy(orderedConnectStrategy());
+    this.setReconnectStrategy(queuedReconnectStrategy());
   }
 
   /**
@@ -161,6 +169,16 @@ export class ClusterManager extends EventEmitter {
    */
   public setConnectStrategy(strategy: IConnectStrategy) {
     this.connectStrategy = strategy;
+    return this;
+  }
+
+  /**
+   * Sets the strategy to use for reconnecting clusters.
+   * @param strategy The strategy to set
+   * @returns The manager
+   */
+  public setReconnectStrategy(strategy: IReconnectStrategy) {
+    this.reconnectStrategy = strategy;
     return this;
   }
 

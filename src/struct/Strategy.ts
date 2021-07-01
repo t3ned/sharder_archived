@@ -1,5 +1,4 @@
 import type { ClusterManager, ClusterConfig } from "../index";
-import cluster from "cluster";
 
 export interface IClusterStrategy {
   /**
@@ -16,15 +15,30 @@ export interface IClusterStrategy {
 
 export interface IConnectStrategy {
   /**
-   * The name of the cluster strategy.
+   * The name of the connect strategy.
    */
   readonly name: string;
 
   /**
    * Runs the strategy.
    * @param manager The manager running the strategy
+   * @param clusterConfigs The configs for the clusters that should connect
    */
   run(manager: ClusterManager, clusterConfigs: ClusterConfig[]): Promise<void>;
+}
+
+export interface IReconnectStrategy {
+  /**
+   * The name of the reconnect strategy.
+   */
+  readonly name: string;
+
+  /**
+   * Runs the strategy.
+   * @param manager The manager running the strategy
+   * @param clusterID The id of the cluster that died
+   */
+  run(manager: ClusterManager, clusterID: number): Promise<void>;
 }
 
 /**
@@ -51,12 +65,25 @@ export function sharedClusterStrategy(): IClusterStrategy {
 export function orderedConnectStrategy(): IConnectStrategy {
   return {
     name: "ordered",
-    run: async (manager, clusterConfigs) => {
+    run: async (_manager, clusterConfigs) => {
       const clusters = clusterConfigs.sort((a, b) => b.id - a.id);
 
       for (let i = 0; i < clusters.length; i++) {
         // TODO - manager.startCluster(clusters[i])
       }
+    }
+  };
+}
+
+/**
+ * The queued reconnect strategy will connect ther clusters by queuing them in the cluster queue.
+ */
+export function queuedReconnectStrategy(): IReconnectStrategy {
+  return {
+    name: "queued",
+    run: async (manager, clusterId) => {
+      const clusterConfig = manager.getCluster(clusterId);
+      if (clusterConfig) return orderedConnectStrategy().run(manager, [clusterConfig]);
     }
   };
 }
