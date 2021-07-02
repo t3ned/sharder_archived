@@ -4,6 +4,7 @@ import {
   Cluster,
   ClusterStats,
   ClusterOptions,
+  InternalIPCEvents,
   IClusterStrategy,
   IConnectStrategy,
   IReconnectStrategy,
@@ -13,6 +14,7 @@ import {
 } from "../index";
 import { Client, ClientOptions, EmbedOptions } from "eris";
 import { ClusterQueue } from "./ClusterQueue";
+import { MasterIPC } from "../ipc/MasterIPC";
 import cluster, { Worker } from "cluster";
 import { EventEmitter } from "events";
 import { readFileSync } from "fs";
@@ -251,6 +253,38 @@ export class ClusterManager extends EventEmitter {
     if (this.isMaster) {
       process.on("uncaughtException", this._handleException.bind(this));
       process.on("unhandledRejection", this._handleRejection.bind(this));
+
+      const masterIPC = new MasterIPC(this);
+
+      masterIPC.registerEvent(InternalIPCEvents.LOG, (_, data) => {
+        this.logger.info(data);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.INFO, (_, data) => {
+        this.logger.info(data);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.DEBUG, (_, data) => {
+        if (!this.options.debugMode) return;
+        this.logger.debug(data);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.WARN, (_, data) => {
+        this.logger.warn(data);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.ERROR, (_, data) => {
+        this.logger.error(data);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.SEND_TO, (_, data) => {
+        if (isNaN(data.clusterId) || !data.message) return;
+        masterIPC.sendTo(data.clusterId, data.message);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.BROADCAST, (_, data) => {
+        masterIPC.broadcast(data);
+      });
 
       process.nextTick(async () => {
         console.clear();
