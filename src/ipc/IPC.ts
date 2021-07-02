@@ -18,6 +18,7 @@ export abstract class IPC<Callback extends Function> extends EventEmitter {
    */
   public registerEvent(name: IPCMessageOp, callback: Callback): void {
     this.events.set(name, callback);
+    this._listen();
   }
 
   /**
@@ -51,7 +52,7 @@ export abstract class IPC<Callback extends Function> extends EventEmitter {
     process.on("message", (message: IPCMessage) => {
       if (!message || !message.op) return;
       const callback = this.events.get(message.op);
-      if (callback) callback(message);
+      if (callback) callback(message.d);
     });
   }
 }
