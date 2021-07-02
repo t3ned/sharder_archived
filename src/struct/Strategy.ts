@@ -1,4 +1,4 @@
-import type { ClusterManager, ClusterConfig } from "../index";
+import type { ClusterManager, ClusterOptions } from "../index";
 
 export interface IClusterStrategy {
   /**
@@ -24,7 +24,7 @@ export interface IConnectStrategy {
    * @param manager The manager running the strategy
    * @param clusterConfigs The configs for the clusters that should connect
    */
-  run(manager: ClusterManager, clusterConfigs: ClusterConfig[]): Promise<void>;
+  run(manager: ClusterManager, clusterConfigs: ClusterOptions[]): Promise<void>;
 }
 
 export interface IReconnectStrategy {
@@ -81,7 +81,7 @@ export function queuedReconnectStrategy(): IReconnectStrategy {
   return {
     name: "queued",
     run: async (manager, clusterId) => {
-      const clusterConfig = manager.getCluster(clusterId);
+      const clusterConfig = manager.getClusterOptions(clusterId);
       if (clusterConfig) return orderedConnectStrategy().run(manager, [clusterConfig]);
     }
   };
