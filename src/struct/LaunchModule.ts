@@ -1,23 +1,18 @@
 import type { Client } from "eris";
-import type { IPC } from "./IPC";
+import type { ClusterIPC } from "../ipc/ClusterIPC";
 
 export abstract class LaunchModule<T extends Client = Client> {
   public client!: T;
   public clusterID: number;
-  public ipc: IPC;
+  public ipc: ClusterIPC;
 
   public constructor(client: T) {
     Object.defineProperty(this, "client", { value: client });
     this.clusterID = client.cluster.id;
     this.ipc = client.cluster.ipc;
-  }
 
-  /**
-   * Restarts a cluster by its id
-   * @param clusterID The cluster to restart
-   */
-  public restartCluster(clusterID: number) {
-    this.ipc.sendTo(clusterID, "restart");
+    // TODO - Add init method
+    // TODO - Add restart method
   }
 
   /**
