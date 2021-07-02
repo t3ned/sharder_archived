@@ -6,7 +6,7 @@ import {
   orderedConnectStrategy,
   queuedReconnectStrategy
 } from "../struct/Strategy";
-import type { APIRequestError, InternalIPCMessage } from "../struct/IPC";
+import type { IPCMessage } from "../ipc/IPC";
 import { Client, ClientOptions, EmbedOptions } from "eris";
 import { Cluster, ClusterConfig, ClusterStats, RawCluster } from "./Cluster";
 import { EventEmitter } from "events";
@@ -261,133 +261,8 @@ export class ClusterManager extends EventEmitter {
       cluster.spawn();
     }
 
-    cluster.on("message", async (worker, message: InternalIPCMessage) => {
-      if (!message.eventName) return;
-
-      const clusterID = this.workers.get(worker.id)!;
-
-      switch (message.eventName) {
-        case "log":
-          this.logger.info(`Cluster ${clusterID}`, `${message.message}`);
-          break;
-
-        case "debug":
-          if (this.options.debugMode) {
-            this.logger.debug(`Cluster ${clusterID}`, `${message.message}`);
-          }
-          break;
-
-        case "info":
-          this.logger.info(`Cluster ${clusterID}`, `${message.message}`);
-          break;
-
-        case "warn":
-          this.logger.warn(`Cluster ${clusterID}`, `${message.message}`);
-          break;
-
-        case "error":
-          this.logger.error(`Cluster ${clusterID}`, `${message.message}`);
-          break;
-
-        case "shardsStarted":
-          // All shards from the previous cluster have started
-          // so move to the next cluster in the queue
-          this.queue.next();
-          if (this.queue.length)
-            setTimeout(() => this.queue.execute(), this.options.clusterTimeout);
-          break;
-
-        case "statsUpdate": {
-          // Add stats to the total stats
-          message.stats.id = clusterID;
-          this.stats.ramUsage += message.stats.ramUsage;
-          this.stats.guilds += message.stats.guilds;
-          this.stats.users += message.stats.users;
-          this.stats.shards += message.stats.shards;
-          this.stats.channels += message.stats.channels;
-          this.stats.voiceConnections += message.stats.voiceConnections;
-          this.stats.clusters.push(message.stats);
-          this.stats.clustersLaunched++;
-
-          // Emit the stats' event if all clusters have sent their stats
-          if (this.stats.clustersLaunched === this.clusters.size) {
-            this.stats.clusters = this.stats.clusters.sort((a, b) => a.id - b.id);
-
-            this.emit("stats", this.stats);
-          }
-          break;
-        }
-
-        case "fetchGuild":
-        case "fetchChannel":
-        case "fetchUser":
-          // Fetch the cached value from each cluster
-          this.fetchInfo(0, message.eventName, message.id);
-          this.callbacks.set(message.id, clusterID);
-          break;
-
-        case "fetchMember":
-          this.fetchInfo(0, message.eventName, [message.guildID, message.id]);
-          this.callbacks.set(message.id, clusterID);
-          break;
-
-        // Send the cached value back to the cluster
-        case "fetchReturn":
-          const callback = this.callbacks.get(message.value.id)!;
-          const _cluster = this.clusters.get(callback);
-
-          if (_cluster) {
-            cluster.workers[_cluster.workerID]!.send({
-              eventName: "fetchReturn",
-              id: message.value.id,
-              value: message.value
-            });
-
-            this.callbacks.delete(message.value.id);
-          }
-          break;
-
-        // Sends a message to all the clusters
-        case "broadcast":
-          this.broadcast(0, message.message);
-          break;
-
-        // Sends a message to a specific cluster
-        case "send":
-          this.sendTo(message.clusterID, message.message);
-          break;
-
-        // Handle api requests sent from the request handler
-        case "apiRequest":
-          try {
-            const data = await this.restClient.requestHandler.request(
-              message.method,
-              message.url,
-              message.auth,
-              message.body,
-              message.file,
-              message.route,
-              message.short
-            );
-
-            this.sendTo(clusterID, {
-              eventName: `apiResponse.${message.requestID}`,
-              data
-            });
-          } catch (e) {
-            const error: APIRequestError = {
-              code: e.code,
-              message: e.message,
-              stack: e.stack
-            };
-
-            this.sendTo(clusterID, {
-              eventName: `apiResponse.${message.requestID}`,
-              error
-            });
-          }
-          break;
-      }
+    cluster.on("message", async (_worker, message: IPCMessage) => {
+      console.log(message);
     });
 
     // Restart a cluster if it dies
@@ -417,38 +292,7 @@ export class ClusterManager extends EventEmitter {
    * @param worker The worker to restart
    * @param code The reason for exiting
    */
-  private restartCluster(worker: Worker, code = 1) {
-    const clusterID = this.workers.get(worker.id)!;
-    const _cluster = this.clusters.get(clusterID)!;
-
-    this.logger.error("Cluster Manager", `Cluster ${clusterID} died with code ${code}`);
-    this.logger.warn("Cluster Manager", `Restarting cluster ${clusterID}...`);
-
-    const embed = {
-      title: `Cluster ${clusterID} died with code ${code}`,
-      description: `Restarting shards ${_cluster.firstShardID} - ${_cluster.lastShardID}`,
-      color: this.webhooks.colors!.error
-    };
-
-    this.sendWebhook("cluster", embed);
-
-    const newWorker = cluster.fork();
-
-    this.workers.delete(worker.id);
-    this.workers.set(newWorker.id, clusterID);
-    this.clusters.set(clusterID, Object.assign(_cluster, { workerID: newWorker.id }));
-
-    this.sendTo(clusterID, { eventName: "statusUpdate", status: "QUEUED" });
-
-    // this.queue.enqueue({
-    //   clusterID,
-    //   token: this.token,
-    //   clusterCount: <number>this.clusterCount,
-    //   shardCount: cluster.shardCount,
-    //   firstShardID: cluster.firstShardID,
-    //   lastShardID: cluster.lastShardID
-    // });
-  }
+  private restartCluster(_worker: Worker, _code = 1) {}
 
   /**
    * Fetches data from the client cache
@@ -485,7 +329,7 @@ export class ClusterManager extends EventEmitter {
    * @param start The initial cluster id to start sending
    * @param message The message to send to the cluster
    */
-  public broadcast(start: number, message: InternalIPCMessage) {
+  public broadcast(start: number, message: IPCMessage) {
     const _cluster = this.clusters.get(start);
 
     if (_cluster) {
@@ -500,7 +344,7 @@ export class ClusterManager extends EventEmitter {
    * @param clusterID The cluster id to send to
    * @param message The message to send to the cluster
    */
-  public sendTo(clusterID: number, message: InternalIPCMessage) {
+  public sendTo(clusterID: number, message: IPCMessage) {
     const _cluster = this.clusters.get(clusterID)!;
     const worker = cluster.workers[_cluster.workerID];
     if (worker) worker.send(message);
