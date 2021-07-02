@@ -1,9 +1,9 @@
 import { IPC, IPCMessage } from "./IPC";
 import { IntervalIPCEvents } from "../index";
 
-export class ClusterIPC extends IPC {
+export class ClusterIPC extends IPC<ClusterIPCCallback> {
   /**
-   * Sends a message to a specified cluster.
+   * Sends a message to the specified cluster.
    * @param clusterId The target cluster id
    * @param message The message to send to the cluster
    */
@@ -32,3 +32,5 @@ export class ClusterIPC extends IPC {
     process.send?.(payload);
   }
 }
+
+export type ClusterIPCCallback<T = any> = (data: IPCMessage<T>) => void;
