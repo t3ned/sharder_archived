@@ -1,5 +1,5 @@
 import { IPC, IPCMessage } from "./IPC";
-import { IntervalIPCEvents } from "../index";
+import { InternalIPCEvents } from "../index";
 
 export class ClusterIPC extends IPC<ClusterIPCCallback> {
   /**
@@ -9,7 +9,7 @@ export class ClusterIPC extends IPC<ClusterIPCCallback> {
    */
   public sendTo(clusterId: number, message: IPCMessage): void {
     const payload: IPCMessage = {
-      op: IntervalIPCEvents.SEND_TO,
+      op: InternalIPCEvents.SEND_TO,
       d: {
         message,
         clusterId
@@ -25,7 +25,7 @@ export class ClusterIPC extends IPC<ClusterIPCCallback> {
    */
   public broadcast(message: IPCMessage): void {
     const payload: IPCMessage = {
-      op: IntervalIPCEvents.BROADCAST,
+      op: InternalIPCEvents.BROADCAST,
       d: message
     };
 
@@ -33,4 +33,4 @@ export class ClusterIPC extends IPC<ClusterIPCCallback> {
   }
 }
 
-export type ClusterIPCCallback<T = any> = (data: IPCMessage<T>) => void;
+export type ClusterIPCCallback<T = any> = (data: T) => void;
