@@ -1,4 +1,9 @@
-export enum IntervalIPCEvents {
+export enum InternalIPCEvents {
   SEND_TO,
-  BROADCAST
+  BROADCAST,
+  LOG,
+  INFO,
+  DEBUG,
+  WARN,
+  ERROR
 }
