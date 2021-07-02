@@ -6,9 +6,8 @@ import {
   orderedConnectStrategy,
   queuedReconnectStrategy
 } from "../struct/Strategy";
-import type { IPCMessage } from "../ipc/IPC";
 import { Client, ClientOptions, EmbedOptions } from "eris";
-import { Cluster, ClusterConfig, ClusterStats, RawCluster } from "./Cluster";
+import { Cluster, ClusterOptions, ClusterStats } from "./Cluster";
 import { EventEmitter } from "events";
 import cluster, { Worker } from "cluster";
 import { readFileSync } from "fs";
@@ -18,12 +17,12 @@ import { join } from "path";
 
 export class ClusterManager extends EventEmitter {
   /**
-   * The fifo cluster queue.
+   * The first-in-first-out cluster queue.
    */
   public queue = new ClusterQueue();
 
   /**
-   * The client used for API calls.
+   * The rest client used for API calls.
    */
   public restClient!: Client;
 
@@ -48,7 +47,7 @@ export class ClusterManager extends EventEmitter {
   public reconnectStrategy!: IReconnectStrategy;
 
   /**
-   * The discord token used for connecting to discord.
+   * The token used for connecting to discord.
    */
   public token!: string;
 
@@ -73,23 +72,17 @@ export class ClusterManager extends EventEmitter {
   public webhooks: Webhooks;
 
   /**
-   * The stats data for the manager and clusters.
+   * The stats data produced by the manager.
    */
   public stats: ClusterManagerStats;
 
-  // TODO - remove
-  public clusters = new Map<number, RawCluster>();
-  public workers = new Map<number, number>();
-  public callbacks = new Map<string, number>();
-
   /**
-   * The configuration for all the clusters.
+   * The options for all the clusters.
    */
-  // TODO - update this to `clusters`
-  #clusters: ClusterConfig[] = [];
+  public clusterOptions: ClusterOptions[] = [];
 
   /**
-   * @param token The discord token used for connecting to discord.
+   * @param token The token used for connecting to discord.
    * @param options The options for the manager.
    */
   public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
@@ -128,8 +121,13 @@ export class ClusterManager extends EventEmitter {
     this.webhooks = {
       cluster: undefined,
       shard: undefined,
-      colors: { success: 0x77dd77, error: 0xff6961, warning: 0xffb347 },
-      ...options.webhooks
+      ...options.webhooks,
+      colors: {
+        success: 0x77dd77,
+        error: 0xff6961,
+        warning: 0xffb347,
+        ...options.webhooks?.colors
+      }
     };
 
     this.stats = {
@@ -143,240 +141,166 @@ export class ClusterManager extends EventEmitter {
       clusters: []
     };
 
-    // Default strategies
+    // Set default strategies
     this.setClusterStrategy(sharedClusterStrategy());
     this.setConnectStrategy(orderedConnectStrategy());
     this.setReconnectStrategy(queuedReconnectStrategy());
   }
 
   /**
-   * Sets the strategy to use for configuring clusters.
-   * @param strategy The strategy to set
-   * @returns The manager
+   * Sets the strategy to use for starting clusters.
+   * @param strategy The strategy
+   * @returns The cluster manager
    */
-  public setClusterStrategy(strategy: IClusterStrategy) {
+  public setClusterStrategy(strategy: IClusterStrategy): this {
     this.clusterStrategy = strategy;
     return this;
   }
 
   /**
    * Sets the strategy to use for connecting clusters.
-   * @param strategy The strategy to set
-   * @returns The manager
+   * @param strategy The strategy
+   * @returns The cluster manager
    */
-  public setConnectStrategy(strategy: IConnectStrategy) {
+  public setConnectStrategy(strategy: IConnectStrategy): this {
     this.connectStrategy = strategy;
     return this;
   }
 
   /**
    * Sets the strategy to use for reconnecting clusters.
-   * @param strategy The strategy to set
-   * @returns The manager
+   * @param strategy The strategy
+   * @returns The cluster manager
    */
-  public setReconnectStrategy(strategy: IReconnectStrategy) {
+  public setReconnectStrategy(strategy: IReconnectStrategy): this {
     this.reconnectStrategy = strategy;
     return this;
   }
 
   /**
-   * Starts a worker process.
-   * @param clusterId The id of the cluster to start
+   * Starts a worker process for a cluster.
+   * @param clusterId The id of the cluster
    */
   public startCluster(clusterId: number): void {
-    const clusterConfig = this.getCluster(clusterId);
-    if (!clusterConfig) return;
+    const clusterOptions = this.getClusterOptions(clusterId);
+    if (!clusterOptions) return;
 
     const worker = cluster.fork();
-    clusterConfig.workerId = worker.id;
-    this.workers.set(worker.id, clusterId);
+    clusterOptions.workerId = worker.id;
 
     this.logger.info(`Started cluster ${clusterId}`);
   }
 
   /**
-   * Adds a cluster config to the clusters to launch.
-   * @param config The config options for the cluster
-   * @returns The manager
+   * Restarts a cluster.
+   * @param worker The worker to restart
+   * @param code The reason for exiting
    */
-  public addCluster(config: ClusterConfig) {
-    if (this.getCluster(config.id)) throw new Error("Clusters cannot have the same ID.");
-    this.#clusters.push(config);
+  public restartCluster(_worker: Worker, _code = 1) {
+    // TODO
+  }
+
+  /**
+   * Adds a cluster's options to the clusters to launch.
+   * @param options The options for the cluster
+   * @returns The cluster manager
+   */
+  public addCluster(options: ClusterOptions): this {
+    if (this.getClusterOptions(options.id))
+      throw new Error("Cluster IDs must be unique.");
+    this.clusterOptions.push(options);
     return this;
   }
 
   /**
-   * Removes a cluster config from the clusters to launch.
-   * @param id The id of the cluster to remove
-   * @returns The manager
+   * Removes a cluster's options from the clusters to launch.
+   * @param clusterId The id of the cluster
+   * @returns The cluster manager
    */
-  public removeCluster(id: number) {
-    const index = this.#clusters.findIndex((x) => x.id === id);
-    if (index !== -1) this.#clusters.splice(index, 1);
+  public removeCluster(clusterId: number): this {
+    const index = this.clusterOptions.findIndex((x) => x.id === clusterId);
+    if (index !== -1) this.clusterOptions.splice(index, 1);
     return this;
   }
 
   /**
-   * Gets the cluster config from cluster id.
-   * @param id The id or worker id of the cluster
-   * @returns The cluster config
+   * Gets a cluster's options from a cluster id.
+   * @param id The id of the cluster
+   * @returns The cluster options
    */
-  public getCluster(id: number) {
-    return this.#clusters.find((x) => x.id === id || x.workerId === id);
+  public getClusterOptions(id: number): ClusterOptions | undefined {
+    return this.clusterOptions.find((x) => x.id === id);
   }
 
   /**
-   * Launches all the clusters
+   * Gets a cluster's options from a worker id.
+   * @param id The id of the worker
+   * @returns The cluster options
    */
-  public launch() {
-    if (cluster.isMaster) {
-      process.on("uncaughtException", this.handleException.bind(this));
-      process.on("unhandledRejection", this.handleRejection.bind(this));
+  public getClusterOptionsByWorker(id: number): ClusterOptions | undefined {
+    return this.clusterOptions.find((x) => x.workerId === id);
+  }
+
+  /**
+   * Launches all the clusters.
+   */
+  public launch(): void {
+    if (this.isMaster) {
+      process.on("uncaughtException", this._handleException.bind(this));
+      process.on("unhandledRejection", this._handleRejection.bind(this));
 
       process.nextTick(async () => {
         console.clear();
 
-        const logo = this.getStartUpLogo();
+        const logo = this._getStartUpLogo();
         if (logo) console.log(`${logo}\n`);
 
         this.logger.info("Initialising clusters...");
-        this.logger.info(`Configuring using the '${this.clusterStrategy.name}' strategy`);
+        cluster.setupMaster({ silent: false });
 
+        // Run the cluster strategy
+        this.logger.info(`Clustering using the '${this.clusterStrategy.name}' strategy`);
         await this.clusterStrategy.run(this);
 
-        if (!this.#clusters.length)
+        if (!this.clusterOptions.length)
           throw new Error("Cluster strategy failed to produce at least 1 cluster.");
 
         this.logger.info("Finished starting clusters");
 
-        cluster.setupMaster({ silent: false });
-
+        // Run the connect strategy
         this.logger.info(`Connecting using the '${this.connectStrategy.name}' strategy`);
-
-        await this.connectStrategy.run(this, this.#clusters);
+        await this.connectStrategy.run(this, this.clusterOptions);
       });
     } else {
-      // Handle a worker instance
+      // Spawn a cluster on the worker process
       const cluster = new Cluster(this);
       cluster.spawn();
     }
 
-    cluster.on("message", async (_worker, message: IPCMessage) => {
-      console.log(message);
-    });
-
-    // Restart a cluster if it dies
-    cluster.on("exit", (worker, code) => {
-      this.restartCluster(worker, code);
-    });
-
-    // Ensure shards connect when the next queue item is ready
-    this.queue.on("execute", (item) => {
-      const _cluster = this.clusters.get(item.clusterID);
-      if (_cluster) {
-        const worker = cluster.workers[_cluster.workerID]!;
-        worker.send({ ...item, eventName: "connect" });
-      }
-    });
+    // Restart a cluster on exit
+    cluster.on("exit", this.restartCluster.bind(this));
   }
 
   /**
-   * Returns true if the process is the master process
+   * Checks whether or not the process is the master process.
+   * @returns Whether or not the process is the master process.
    */
-  public isMaster() {
+  public get isMaster() {
     return cluster.isMaster;
   }
 
   /**
-   * Restarts a cluster
-   * @param worker The worker to restart
-   * @param code The reason for exiting
+   * Sends a webhook embed.
+   * @param type The type of webhook
+   * @param embed The embed
    */
-  private restartCluster(_worker: Worker, _code = 1) {}
-
-  /**
-   * Fetches data from the client cache
-   * @param start The initial cluster id to start fetching
-   * @param eventName The type of data to fetch
-   * @param value The lookup value
-   */
-  public fetchInfo(start: number, eventName: string, value: string | string[]) {
-    const _cluster = this.clusters.get(start);
-
-    if (_cluster) {
-      const worker = cluster.workers[_cluster.workerID]!;
-      worker.send({ eventName, value });
-      this.fetchInfo(start + 1, eventName, value);
-    }
-  }
-
-  /**
-   * Updates the cluster stats
-   * @param clusters The workers to update the stats for
-   * @param start The initial cluster id to start updating
-   */
-  public updateStats(clusters: Worker[], start: number) {
-    const worker = clusters[start];
-
-    if (worker) {
-      worker.send({ eventName: "statsUpdate" });
-      this.updateStats(clusters, ++start);
-    }
-  }
-
-  /**
-   * Sends a message to all clusters
-   * @param start The initial cluster id to start sending
-   * @param message The message to send to the cluster
-   */
-  public broadcast(start: number, message: IPCMessage) {
-    const _cluster = this.clusters.get(start);
-
-    if (_cluster) {
-      const worker = cluster.workers[_cluster.workerID]!;
-      worker.send(message);
-      this.broadcast(++start, message);
-    }
-  }
-
-  /**
-   * Sends a message to the specified cluster
-   * @param clusterID The cluster id to send to
-   * @param message The message to send to the cluster
-   */
-  public sendTo(clusterID: number, message: IPCMessage) {
-    const _cluster = this.clusters.get(clusterID)!;
-    const worker = cluster.workers[_cluster.workerID];
-    if (worker) worker.send(message);
-  }
-
-  public sendWebhook(type: "cluster" | "shard", embed: EmbedOptions) {
+  public async sendWebhook(type: WebhookType, embed: EmbedOptions): Promise<void> {
     const webhook = this.webhooks[type];
     if (!webhook) return;
 
-    const { id, token } = webhook;
-    return this.restClient.executeWebhook(id, token, { embeds: [embed] });
-  }
-
-  /**
-   * Resolves the logo print into a string from the file path.
-   * @returns The logo to print
-   */
-  private getStartUpLogo(): string | null {
-    const path = join(process.cwd(), this.options.startUpLogoPath);
-
-    try {
-      const logo = readFileSync(path, "utf-8");
-      if (logo && logo.length > 0) return logo;
-      return null;
-    } catch (error) {
-      if (this.options.startUpLogoPath) {
-        this.logger.error(`Failed to locate logo file: ${path}`);
-        process.exit(1);
-      }
-
-      return null;
-    }
+    return this.restClient.executeWebhook(webhook.id, webhook.token, {
+      embeds: [embed]
+    });
   }
 
   /**
@@ -398,7 +322,6 @@ export class ClusterManager extends EventEmitter {
    */
   public async fetchShardCount(): Promise<number> {
     const guildCount = await this.fetchGuildCount();
-
     const { guildsPerShard, shardCountOverride } = this.options;
 
     const shardCount = Math.ceil(guildCount / guildsPerShard);
@@ -406,10 +329,31 @@ export class ClusterManager extends EventEmitter {
   }
 
   /**
+   * Resolves the logo print into a string from the file path.
+   * @returns The logo
+   */
+  private _getStartUpLogo(): string | null {
+    const path = join(process.cwd(), this.options.startUpLogoPath);
+
+    try {
+      const logo = readFileSync(path, "utf-8");
+      if (logo && logo.length > 0) return logo;
+      return null;
+    } catch (error) {
+      if (this.options.startUpLogoPath) {
+        this.logger.error(`Failed to locate logo file: ${path}`);
+        process.exit(1);
+      }
+
+      return null;
+    }
+  }
+
+  /**
    * Handles an unhandled exception.
    * @param error The error
    */
-  private handleException(error: Error): void {
+  private _handleException(error: Error): void {
     this.logger.error(error);
   }
 
@@ -418,7 +362,7 @@ export class ClusterManager extends EventEmitter {
    * @param reason The reason why the promise was rejected
    * @param p The promise
    */
-  private handleRejection(reason: Error, p: Promise<any>): void {
+  private _handleRejection(reason: Error, p: Promise<any>): void {
     this.logger.error("Unhandled rejection at Promise:", p, "reason:", reason);
   }
 }
@@ -465,7 +409,7 @@ export interface ClusterManagerStats {
 export interface Webhooks {
   cluster?: WebhookOptions;
   shard?: WebhookOptions;
-  colors?: WebhookColorOptions;
+  colors?: Partial<WebhookColorOptions>;
 }
 
 export interface WebhookOptions {
@@ -478,3 +422,5 @@ export interface WebhookColorOptions {
   error: number;
   warning: number;
 }
+
+export type WebhookType = "cluster" | "shard";
