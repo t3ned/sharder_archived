@@ -1,18 +1,21 @@
 import {
+  Logger,
+  ILogger,
+  Cluster,
+  ClusterStats,
+  ClusterOptions,
   IClusterStrategy,
   IConnectStrategy,
   IReconnectStrategy,
   sharedClusterStrategy,
   orderedConnectStrategy,
   queuedReconnectStrategy
-} from "../struct/Strategy";
+} from "../index";
 import { Client, ClientOptions, EmbedOptions } from "eris";
-import { Cluster, ClusterOptions, ClusterStats } from "./Cluster";
-import { EventEmitter } from "events";
-import cluster, { Worker } from "cluster";
-import { readFileSync } from "fs";
 import { ClusterQueue } from "./ClusterQueue";
-import { ILogger, Logger } from "../struct/Logger";
+import cluster, { Worker } from "cluster";
+import { EventEmitter } from "events";
+import { readFileSync } from "fs";
 import { join } from "path";
 
 export class ClusterManager extends EventEmitter {
