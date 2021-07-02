@@ -76,13 +76,6 @@ export class Cluster {
   }
 }
 
-export interface RawCluster {
-  workerID: number;
-  shardCount: number;
-  firstShardID: number;
-  lastShardID: number;
-}
-
 export type ClusterStatus = "IDLE" | "QUEUED" | "CONNECTING" | "READY" | "DEAD";
 
 export interface ClusterStats {
@@ -112,7 +105,7 @@ declare module "eris" {
   }
 }
 
-export interface ClusterConfig {
+export interface ClusterOptions {
   id: number;
   workerId?: number;
   name?: string;
