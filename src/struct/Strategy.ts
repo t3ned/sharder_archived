@@ -55,6 +55,8 @@ export function sharedClusterStrategy(): IClusterStrategy {
         firstShardId: 0,
         lastShardId: shardCount - 1
       });
+
+      manager.startCluster(0);
     }
   };
 }
@@ -67,10 +69,7 @@ export function orderedConnectStrategy(): IConnectStrategy {
     name: "ordered",
     run: async (_manager, clusterConfigs) => {
       const clusters = clusterConfigs.sort((a, b) => b.id - a.id);
-
-      for (let i = 0; i < clusters.length; i++) {
-        // TODO - manager.startCluster(clusters[i])
-      }
+      void clusters;
     }
   };
 }
