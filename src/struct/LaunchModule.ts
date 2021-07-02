@@ -1,26 +1,41 @@
 import type { Client } from "eris";
-import type { ClusterIPC } from "../ipc/ClusterIPC";
 
 export abstract class LaunchModule<T extends Client = Client> {
+  /**
+   * The client assiend to this launch module.
+   */
   public client!: T;
-  public clusterID: number;
-  public ipc: ClusterIPC;
 
+  /**
+   * @param client The client assigned to this launch module
+   */
   public constructor(client: T) {
-    Object.defineProperty(this, "client", { value: client });
-    this.clusterID = client.cluster.id;
-    this.ipc = client.cluster.ipc;
-
-    // TODO - Add init method
-    // TODO - Add restart method
+    Reflect.defineProperty(this, "client", { value: client });
   }
 
   /**
-   * The launched cluster
+   * A method that is called before the shards connect.
+   */
+  public abstract init(): void;
+
+  /**
+   * A method that is called after the shards connect.
+   */
+  public abstract launch(): void;
+
+  /**
+   * The cluster assigned to this launch module.
+   * @returns The cluster
    */
   public get cluster() {
     return this.client.cluster;
   }
 
-  public abstract launch(): void;
+  /**
+   * The cluster ipc asigned to this launch module.
+   * @returns The cluster ipc
+   */
+  public get ipc() {
+    return this.cluster.ipc;
+  }
 }
