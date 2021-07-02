@@ -1,10 +1,10 @@
 import { EventEmitter } from "events";
 
-export abstract class IPC extends EventEmitter {
+export abstract class IPC<Callback extends Function> extends EventEmitter {
   /**
-   * The register IPC events.
+   * The registered IPC events.
    */
-  public events = new Map<IPCMessageOp, Callback>();
+  public events = new Map<IPCMessageOp, Function>();
 
   /**
    * Whether or not the IPC is listening for messages.
@@ -62,4 +62,3 @@ export interface IPCMessage<T = any> {
 }
 
 export type IPCMessageOp = string | number;
-export type Callback<T = any> = (data: IPCMessage<T>) => void;
