@@ -56,13 +56,13 @@ export class MasterIPC extends IPC<MasterIPCCallback> {
     this.isListening = true;
 
     cluster.on("message", (worker, message: IPCMessage) => {
-      const cluster = this.manager.getClusterOptions(worker.id);
-      if (!cluster || !message || !message.op) return;
+      const cluster = this.manager.getClusterOptionsByWorker(worker.id);
+      if (!cluster || !message) return;
 
       const callback = this.events.get(message.op);
-      if (callback) callback(cluster.id, message);
+      if (callback) callback(cluster.id, message.d);
     });
   }
 }
 
-export type MasterIPCCallback<T = any> = (clusterId: number, data: IPCMessage<T>) => void;
+export type MasterIPCCallback<T = any> = (clusterId: number, data: T) => void;
