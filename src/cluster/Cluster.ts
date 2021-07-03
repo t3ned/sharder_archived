@@ -70,25 +70,32 @@ export class Cluster {
     this.status = "WAITING";
 
     client.on("connect", (id) => {
-      logger.debug(`Shard ${id} established a connection`);
+      logger.debug(`[C${this.id}] Shard ${id} established a connection`);
     });
 
     client.on("shardReady", (id) => {
       if (id === this.firstShardId) this.status = "CONNECTING";
-      logger.debug(`Shard ${id} is ready`);
+      logger.debug(`[C${this.id}] Shard ${id} is ready`);
     });
 
     client.on("ready", () => {
       this.status = "READY";
-      logger.debug(`Shards ${this.firstShardId} - ${this.lastShardId} are ready`);
+      logger.debug(
+        `[C${this.id}] Shards ${this.firstShardId} - ${this.lastShardId} are ready`
+      );
     });
 
     client.once("ready", () => {
       this.launchModule?.launch();
+
+      process.send?.({
+        op: InternalIPCEvents.CONNECTED_SHARDS,
+        d: {}
+      });
     });
 
     client.on("shardDisconnect", (_error, id) => {
-      logger.error(`Shard ${id} disconnected`);
+      logger.error(`[C${this.id}] Shard ${id} disconnected`);
 
       if (this.isDead) {
         this.status = "DEAD";
@@ -98,15 +105,15 @@ export class Cluster {
 
     client.on("shardResume", (id) => {
       if (this.status === "DEAD") this.status = "CONNECTING";
-      logger.warn(`Shard ${id} resumed`);
+      logger.warn(`[C${this.id}] Shard ${id} resumed`);
     });
 
     client.on("error", (error, id) => {
-      logger.error(`Shard ${id} error: ${error}`);
+      logger.error(`[C${this.id}] Shard ${id} error: ${error}`);
     });
 
     client.on("warn", (message, id) => {
-      logger.warn(`Shard ${id} warning: ${message}`);
+      logger.warn(`[C${this.id}] Shard ${id} warning: ${message}`);
     });
 
     // Connect all the shards when the cluster receives the payload
