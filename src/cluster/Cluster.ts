@@ -109,6 +109,18 @@ export class Cluster {
       logger.warn(`Shard ${id} warning: ${message}`);
     });
 
+    // Connect all the shards when the cluster receives the payload
+    this.ipc.registerEvent(InternalIPCEvents.CONNECT_SHARDS, () => {
+      this.client?.connect();
+    });
+
+    this.ipc.registerEvent(InternalIPCEvents.CONNECT_SHARD, (data) => {
+      const shardId = <number>data.shardId;
+      if (shardId < this.firstShardId || shardId > this.lastShardId) return;
+      const shard = client.shards.get(shardId);
+      if (shard) shard.connect();
+    });
+
     // TODO - stats
   }
 
