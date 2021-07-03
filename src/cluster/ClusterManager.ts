@@ -142,7 +142,7 @@ export class ClusterManager extends EventEmitter {
 
     this.stats = {
       shards: 0,
-      clustersLaunched: 0,
+      clustersIdentified: 0,
       guilds: 0,
       users: 0,
       channels: 0,
@@ -286,6 +286,12 @@ export class ClusterManager extends EventEmitter {
         const clusterOptions = this.getClusterOptionsByWorker(data.workerId);
         if (!clusterOptions) return;
 
+        this.stats.clustersIdentified++;
+
+        if (this.stats.clustersIdentified === this.clusterOptions.length) {
+          this.emit("clustersIdentified", this.stats.clustersIdentified);
+        }
+
         masterIPC.sendTo(clusterOptions.id, {
           op: InternalIPCEvents.IDENTIFY,
           d: {
@@ -307,6 +313,13 @@ export class ClusterManager extends EventEmitter {
         masterIPC.broadcast(data);
       });
 
+      this.queue.on("connectCluster", (clusterOptions) => {
+        masterIPC.sendTo(clusterOptions.id, {
+          op: InternalIPCEvents.CONNECT_SHARDS,
+          d: clusterOptions
+        });
+      });
+
       process.nextTick(async () => {
         console.clear();
 
@@ -324,6 +337,9 @@ export class ClusterManager extends EventEmitter {
           throw new Error("Cluster strategy failed to produce at least 1 cluster.");
 
         this.logger.info("Finished starting clusters");
+
+        // Wait for all the clusters to identify
+        await this._waitForClustersToIdentify();
 
         // Run the connect strategy
         this.logger.info(`Connecting using the '${this.connectStrategy.name}' strategy`);
@@ -408,6 +424,17 @@ export class ClusterManager extends EventEmitter {
   }
 
   /**
+   * Resolves once all the clusters have identified.
+   */
+  private _waitForClustersToIdentify(): Promise<void> {
+    return new Promise((resolve) => {
+      this.once("clustersIdentified", () => {
+        resolve(void 0);
+      });
+    });
+  }
+
+  /**
    * Resolves the logo print into a string from the file path.
    * @returns The logo
    */
@@ -449,6 +476,8 @@ export class ClusterManager extends EventEmitter {
 export interface ClusterManager {
   on(event: "stats", listener: (stats: ClusterManagerStats) => void): this;
   once(event: "stats", listener: (stats: ClusterManagerStats) => void): this;
+  on(event: "clustersIdentified", listener: (clusters: number) => void): this;
+  once(event: "clustersIdentified", listener: (clusters: number) => void): this;
 }
 
 export interface ClusterManagerOptions {
@@ -477,7 +506,7 @@ export interface ClusterManagerOptions {
 export interface ClusterManagerStats {
   shards: number;
   clusters: ClusterStats[];
-  clustersLaunched: number;
+  clustersIdentified: number;
   guilds: number;
   users: number;
   channels: number;
