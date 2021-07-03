@@ -87,6 +87,11 @@ export class ClusterManager extends EventEmitter {
   public clusterOptions: ClusterOptions[] = [];
 
   /**
+   * The total shards the manager will connect.
+   */
+  #shardCount: number = 0;
+
+  /**
    * @param token The token used for connecting to discord.
    * @param options The options for the manager.
    */
@@ -277,6 +282,22 @@ export class ClusterManager extends EventEmitter {
         this.logger.error(data);
       });
 
+      masterIPC.registerEvent(InternalIPCEvents.IDENTIFY, (_, data) => {
+        const clusterOptions = this.getClusterOptionsByWorker(data.workerId);
+        if (!clusterOptions) return;
+
+        masterIPC.sendTo(clusterOptions.id, {
+          op: InternalIPCEvents.IDENTIFY,
+          d: {
+            clusterName: clusterOptions.name,
+            clusterId: clusterOptions.id,
+            firstShardId: clusterOptions.firstShardId,
+            lastShardId: clusterOptions.lastShardId,
+            shardCount: this.shardCount
+          }
+        });
+      });
+
       masterIPC.registerEvent(InternalIPCEvents.SEND_TO, (_, data) => {
         if (isNaN(data.clusterId) || !data.message) return;
         masterIPC.sendTo(data.clusterId, data.message);
@@ -355,14 +376,35 @@ export class ClusterManager extends EventEmitter {
 
   /**
    * Fetches the recommended number of shards to spawn.
+   * @param set Whether or not the shard count should be set on the manager
    * @returns The shard count
    */
-  public async fetchShardCount(): Promise<number> {
+  public async fetchShardCount(set: boolean = true): Promise<number> {
     const guildCount = await this.fetchGuildCount();
     const { guildsPerShard, shardCountOverride } = this.options;
 
     const shardCount = Math.ceil(guildCount / guildsPerShard);
-    return Math.max(shardCountOverride, shardCount);
+    const finalShardCount = Math.max(shardCountOverride, shardCount);
+    if (set) this.setShardCount(finalShardCount);
+    return shardCount;
+  }
+
+  /**
+   * Sets the shard count.
+   * @param shardCount The shard count
+   * @returns The cluster manager
+   */
+  public setShardCount(shardCount: number) {
+    this.#shardCount = shardCount;
+    return this;
+  }
+
+  /**
+   * Gets the shard count.
+   * @returns The shard count
+   */
+  public get shardCount() {
+    return this.#shardCount;
   }
 
   /**
