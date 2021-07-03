@@ -1,44 +1,69 @@
 import { EventEmitter } from "events";
+import { ClusterOptions } from "../index";
 
 export class ClusterQueue extends EventEmitter {
-  public items: QueuedCluster[] = [];
+  /**
+   * The clusters currently in the queue.
+   */
+  public clusters: ClusterOptions[] = [];
 
   /**
-   * Execute the next queued cluster
+   * Whether or not a cluster is being processed.
    */
-  public execute() {
-    const [item] = this.items;
-    if (item) this.emit("execute", item);
+  public isProcessing: boolean = false;
+
+  /**
+   * Adds a cluster into the queue.
+   * @param cluster The cluster to queue
+   */
+  public enqueue(cluster: ClusterOptions): void {
+    this.clusters.push(cluster);
+    this.process();
   }
 
   /**
-   * Queues a cluster for gateway connection
-   * @param item
+   * Processes the next cluster.
    */
-  public enqueue(item: QueuedCluster) {
-    const { length } = this.items;
-    this.items.push(item);
-    if (!length) this.execute();
+  public async process(): Promise<void> {
+    if (this.isProcessing) return;
+    this.isProcessing = true;
+
+    const cluster = this.clusters.shift();
+
+    if (!cluster) {
+      this.isProcessing = false;
+      if (!this.clusters.length) return;
+      return this.process();
+    }
+
+    const connectNext = new Promise((resolve) => {
+      this.once("next", () => {
+        resolve(true);
+      });
+    });
+
+    this.emit("connectCluster", cluster);
+    await connectNext;
+
+    this.isProcessing = false;
+    this.process();
   }
 
-  public next() {
-    this.items.shift();
+  /**
+   * Tells the queue a cluster is connected.
+   */
+  public next(): void {
+    this.emit("next");
   }
 
-  public get length() {
-    return this.items.length;
+  /**
+   * Clears the queue.
+   */
+  public clear(): void {
+    this.clusters.length = 0;
   }
 }
 
 export interface ClusterQueue {
-  on(event: "execute", listener: (item: QueuedCluster) => void): any;
-}
-
-export interface QueuedCluster {
-  clusterID: number;
-  clusterCount: number;
-  firstShardID: number;
-  lastShardID: number;
-  shardCount: number;
-  token: string;
+  on(event: "connectCluster", listener: (clusterOptions: ClusterOptions) => void): this;
 }
