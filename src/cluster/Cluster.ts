@@ -1,8 +1,8 @@
 import type { Client, ClientOptions, Shard } from "eris";
-import type { ClusterManager } from "./ClusterManager";
-import { LaunchModule } from "../struct/LaunchModule";
+import { ClusterManager, LaunchModule, InternalIPCEvents } from "../index";
 import { ClusterIPC } from "../ipc/ClusterIPC";
 import { join } from "path";
+import cluster from "cluster";
 
 export class Cluster {
   public client?: Client;
@@ -13,9 +13,10 @@ export class Cluster {
   public status: ClusterStatus = "IDLE";
 
   // Cluster shard values
+  public name?: string;
   public shardCount = 0;
-  public firstShardID = 0;
-  public lastShardID = 0;
+  public firstShardId = 0;
+  public lastShardId = 0;
 
   // Cluster stats
   public guilds = 0;
@@ -35,7 +36,7 @@ export class Cluster {
   /**
    * Initialises the cluster
    */
-  public spawn() {
+  public async spawn(): Promise<void> {
     const { clientOptions, clientBase, token, logger } = this.manager;
 
     process.on("uncaughtException", (error) => {
@@ -46,12 +47,15 @@ export class Cluster {
       logger.error(`Cluster ${this.id}: ${error}`);
     });
 
+    await this._identify();
+    if (this.id === -1) return;
+
     const options: ClientOptions = {
       ...clientOptions,
       autoreconnect: true,
-      firstShardID: this.firstShardID,
-      lastShardID: this.lastShardID,
-      maxShards: 1 // TODO
+      firstShardID: this.firstShardId,
+      lastShardID: this.lastShardId,
+      maxShards: this.manager.shardCount
     };
 
     const client = new clientBase(token, options);
@@ -70,13 +74,13 @@ export class Cluster {
     });
 
     client.on("shardReady", (id) => {
-      if (id === this.firstShardID) this.status = "CONNECTING";
+      if (id === this.firstShardId) this.status = "CONNECTING";
       logger.debug(`Cluster ${id} is ready`);
     });
 
     client.on("ready", () => {
       this.status = "READY";
-      logger.debug(`Shards ${this.firstShardID} - ${this.lastShardID} are ready`);
+      logger.debug(`Shards ${this.firstShardId} - ${this.lastShardId} are ready`);
     });
 
     client.once("ready", () => {
@@ -142,6 +146,35 @@ export class Cluster {
   }
 
   /**
+   * Sends a message to the master process requesting identifying information for the cluster.
+   * @returns Whether or not the cluster identified
+   */
+  private _identify() {
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(false), 3000);
+
+      this.ipc.registerEvent(InternalIPCEvents.IDENTIFY, (payload: IdentifyPayload) => {
+        if (payload.clusterName) this.name = payload.clusterName;
+        this.id = payload.clusterId;
+        this.shardCount = payload.shardCount;
+        this.firstShardId = payload.firstShardId;
+        this.lastShardId = payload.lastShardId;
+
+        this.ipc.unregisterEvent(InternalIPCEvents.IDENTIFY);
+        clearTimeout(timeout);
+        resolve(true);
+      });
+
+      process.send?.({
+        op: InternalIPCEvents.IDENTIFY,
+        d: {
+          workerId: cluster.worker.id
+        }
+      });
+    });
+  }
+
+  /**
    * Resolves the launch module.
    * @returns The launch module
    */
@@ -203,4 +236,12 @@ export interface ClusterOptions {
   name?: string;
   firstShardId: number;
   lastShardId: number;
+}
+
+export interface IdentifyPayload {
+  clusterName?: string;
+  clusterId: number;
+  firstShardId: number;
+  lastShardId: number;
+  shardCount: number;
 }
