@@ -70,12 +70,12 @@ export class Cluster {
     this.status = "WAITING";
 
     client.on("connect", (id) => {
-      logger.debug(`Cluster ${id} established a connection`);
+      logger.debug(`Shard ${id} established a connection`);
     });
 
     client.on("shardReady", (id) => {
       if (id === this.firstShardId) this.status = "CONNECTING";
-      logger.debug(`Cluster ${id} is ready`);
+      logger.debug(`Shard ${id} is ready`);
     });
 
     client.on("ready", () => {
