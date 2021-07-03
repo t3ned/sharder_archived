@@ -67,9 +67,12 @@ export function sharedClusterStrategy(): IClusterStrategy {
 export function orderedConnectStrategy(): IConnectStrategy {
   return {
     name: "ordered",
-    run: async (_manager, clusterConfigs) => {
+    run: async (manager, clusterConfigs) => {
       const clusters = clusterConfigs.sort((a, b) => b.id - a.id);
-      void clusters;
+
+      for (const cluster of clusters) {
+        manager.queue.enqueue(cluster);
+      }
     }
   };
 }
