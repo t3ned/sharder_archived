@@ -8,5 +8,6 @@ export enum InternalIPCEvents {
   ERROR,
   IDENTIFY,
   CONNECT_SHARDS,
-  CONNECT_SHARD
+  CONNECT_SHARD,
+  CONNECTED_SHARDS
 }
