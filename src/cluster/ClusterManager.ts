@@ -114,7 +114,9 @@ export class ClusterManager extends EventEmitter {
 
     options.shardCountOverride = options.shardCountOverride ?? 0;
     options.firstShardId = options.firstShardId ?? 0;
-    options.lastShardId = options.lastShardId ?? 0;
+    options.lastShardId =
+      options.lastShardId ??
+      (options.shardCountOverride > 0 ? options.shardCountOverride - 1 : 0);
     options.guildsPerShard = options.guildsPerShard ?? 1500;
 
     options.clusterIdOffset = options.clusterIdOffset ?? 0;
