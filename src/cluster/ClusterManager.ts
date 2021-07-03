@@ -304,6 +304,12 @@ export class ClusterManager extends EventEmitter {
         });
       });
 
+      masterIPC.registerEvent(InternalIPCEvents.CONNECTED_SHARDS, () => {
+        setTimeout(() => {
+          this.queue.next();
+        }, this.options.clusterTimeout);
+      });
+
       masterIPC.registerEvent(InternalIPCEvents.SEND_TO, (_, data) => {
         if (isNaN(data.clusterId) || !data.message) return;
         masterIPC.sendTo(data.clusterId, data.message);
@@ -336,10 +342,11 @@ export class ClusterManager extends EventEmitter {
         if (!this.clusterOptions.length)
           throw new Error("Cluster strategy failed to produce at least 1 cluster.");
 
-        this.logger.info("Finished starting clusters");
+        this.logger.info("Finished starting clusters, indentifying...");
 
         // Wait for all the clusters to identify
         await this._waitForClustersToIdentify();
+        console.log("Finished identifying clusters");
 
         // Run the connect strategy
         this.logger.info(`Connecting using the '${this.connectStrategy.name}' strategy`);
