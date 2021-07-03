@@ -6,5 +6,7 @@ export enum InternalIPCEvents {
   DEBUG,
   WARN,
   ERROR,
-  IDENTIFY
+  IDENTIFY,
+  CONNECT_SHARDS,
+  CONNECT_SHARD
 }
