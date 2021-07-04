@@ -290,12 +290,6 @@ export class ClusterManager extends EventEmitter {
         const clusterOptions = this.getClusterOptionsByWorker(data.workerId);
         if (!clusterOptions) return;
 
-        this.stats.clustersIdentified++;
-
-        if (this.stats.clustersIdentified === this.clusterOptions.length) {
-          this.emit("clustersIdentified", this.stats.clustersIdentified);
-        }
-
         masterIPC.sendTo(clusterOptions.id, {
           op: InternalIPCEvents.IDENTIFY,
           d: {
@@ -306,6 +300,14 @@ export class ClusterManager extends EventEmitter {
             shardCount: this.shardCount
           }
         });
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.HANDSHAKE, () => {
+        this.stats.clustersIdentified++;
+
+        if (this.stats.clustersIdentified === this.clusterOptions.length) {
+          this.emit("clustersIdentified", this.stats.clustersIdentified);
+        }
       });
 
       masterIPC.registerEvent(InternalIPCEvents.CONNECTED_SHARDS, () => {

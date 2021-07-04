@@ -129,6 +129,7 @@ export class Cluster {
     });
 
     // TODO - stats
+    this._handshake();
   }
 
   /**
@@ -190,6 +191,16 @@ export class Cluster {
           workerId: cluster.worker.id
         }
       });
+    });
+  }
+
+  /**
+   * Sends a message to the master process telling it that the cluster is ready.
+   */
+  private _handshake(): void {
+    process.send?.({
+      op: InternalIPCEvents.HANDSHAKE,
+      d: {}
     });
   }
 
