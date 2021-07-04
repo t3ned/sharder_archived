@@ -5,48 +5,99 @@ import { join } from "path";
 import cluster from "cluster";
 
 export class Cluster {
+  /**
+   * The Eris.Client instance.
+   */
   public client?: Client;
+
+  /**
+   * The manager controlling this cluster.
+   */
   public manager!: ClusterManager;
+
+  /**
+   * The cluster ipc.
+   */
   public ipc: ClusterIPC;
 
+  /**
+   * The id of the cluster.
+   */
   public id = -1;
+
+  /**
+   * The status of the cluster.
+   */
   public status: ClusterStatus = "IDLE";
 
-  // Cluster shard values
+  /**
+   * The name of the cluster.
+   */
   public name?: string;
+
+  /**
+   * The total shard count across all clusters.
+   */
   public shardCount = 0;
+
+  /**
+   * The first shard id for this cluster.
+   */
   public firstShardId = 0;
+
+  /**
+   * The last shard id for this cluster.
+   */
   public lastShardId = 0;
 
-  // Cluster stats
+  /**
+   * The client's total guilds.
+   */
   public guilds = 0;
+
+  /**
+   * The client's total users.
+   */
   public users = 0;
+
+  /**
+   * The client's total channels.
+   */
   public channels = 0;
+
+  /**
+   * The client's total voice connections.
+   */
   public voiceConnections = 0;
+
+  /**
+   * The cluster's shard stats.
+   */
   public shardStats: ShardStats[] = [];
 
-  // Base cluster launch module
+  /**
+   * The launch module.
+   */
   public launchModule: LaunchModule | null = null;
 
+  /**
+   * @param manager The manager controlling this cluster.
+   */
   public constructor(manager: ClusterManager) {
     Object.defineProperty(this, "manager", { value: manager });
     this.ipc = new ClusterIPC();
   }
 
   /**
-   * Initialises the cluster
+   * Initialises the cluster.
    */
   public async spawn(): Promise<void> {
+    process.on("uncaughtException", this._handleException.bind(this));
+    process.on("unhandledRejection", this._handleRejection.bind(this));
+
     const { clientOptions, clientBase, token, logger } = this.manager;
 
-    process.on("uncaughtException", (error) => {
-      logger.error(`Cluster ${this.id}: ${error}`);
-    });
-
-    process.on("unhandledRejection", (error: Error) => {
-      logger.error(`Cluster ${this.id}: ${error}`);
-    });
-
+    // Identify the cluster
     await this._identify();
     if (this.id === -1) return;
 
@@ -58,14 +109,16 @@ export class Cluster {
       maxShards: this.manager.shardCount
     };
 
+    // Initialise the client
     const client = new clientBase(token, options);
     Reflect.defineProperty(this, "client", { value: client });
     this.client!.cluster = this;
 
+    // TODO - add optional synced request handler
+
+    // Initialise the launch module
     const launchModule = this._getLaunchModule();
     if (launchModule) launchModule.init();
-
-    // TODO - add optional synced request handler
 
     this.status = "WAITING";
 
@@ -99,7 +152,7 @@ export class Cluster {
 
       if (this.isDead) {
         this.status = "DEAD";
-        logger.error(`Cluster ${this.id} died`);
+        logger.error(`[C${this.id}] All shards died`);
       }
     });
 
@@ -116,7 +169,6 @@ export class Cluster {
       logger.warn(`[C${this.id}] Shard ${id} warning: ${message}`);
     });
 
-    // Connect all the shards when the cluster receives the payload
     this.ipc.registerEvent(InternalIPCEvents.CONNECT_ALL, () => {
       this.client?.connect();
     });
@@ -128,7 +180,8 @@ export class Cluster {
       if (shard) shard.connect();
     });
 
-    // TODO - stats
+    // TODO - update stats
+
     this._handshake();
   }
 
@@ -136,7 +189,7 @@ export class Cluster {
    * Fetches the cluster's average shard latency.
    * @returns The cluster's latency
    */
-  public get latency() {
+  public get latency(): number {
     const total = this.shardStats.reduce((a, b) => a + b.latency, 0);
     return this.shardCount ? total / this.shardCount : 0;
   }
@@ -145,15 +198,15 @@ export class Cluster {
    * Fetches the cluster's memory usage.
    * @returns The cluster's memory usage.
    */
-  public get ramUsage() {
+  public get ramUsage(): number {
     return process.memoryUsage().heapUsed / 1000000;
   }
 
   /**
-   * Fetches the update of the cluster.
+   * Fetches the uptime of the cluster.
    * @returns The cluster's uptime
    */
-  public get uptime() {
+  public get uptime(): number {
     return process.uptime() * 1000;
   }
 
@@ -161,7 +214,7 @@ export class Cluster {
    * Checks whether or not the cluster is dead.
    * @returns Whether or not the cluster is dead
    */
-  public get isDead() {
+  public get isDead(): boolean {
     return !!this.client?.shards.every((shard) => shard.status === "disconnected");
   }
 
@@ -169,7 +222,7 @@ export class Cluster {
    * Sends a message to the master process requesting identifying information for the cluster.
    * @returns Whether or not the cluster identified
    */
-  private _identify() {
+  private _identify(): Promise<boolean> {
     return new Promise((resolve) => {
       const timeout = setTimeout(() => resolve(false), 3000);
 
@@ -228,6 +281,25 @@ export class Cluster {
     }
 
     return this.launchModule;
+  }
+
+  /**
+   * Handles an unhandled exception.
+   * @param error The error
+   */
+  private _handleException(error: Error): void {
+    this.manager.logger.error(`[C${this.id}] ${error}`);
+  }
+
+  /**
+   * Handles unhandled promise rejections.
+   * @param reason The reason why the promise was rejected
+   * @param p The promise
+   */
+  private _handleRejection(reason: Error, p: Promise<any>): void {
+    this.manager.logger.error(
+      `[C${this.id}] Unhandled rejection at Promise: ${p} reason: ${reason}`
+    );
   }
 }
 
