@@ -8,7 +8,13 @@ export enum InternalIPCEvents {
   ERROR,
   IDENTIFY,
   HANDSHAKE,
-  CONNECT_SHARDS,
-  CONNECT_SHARD,
-  CONNECTED_SHARDS
+  CONNECT_ALL,
+  CONNECT_ONE,
+  CLUSTER_READY
+}
+
+export enum Colors {
+  SUCCESS = 0x77dd77,
+  ERROR = 0xff6961,
+  WARNING = 0xffb347
 }
