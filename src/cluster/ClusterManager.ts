@@ -1,4 +1,5 @@
 import {
+  VERSION,
   Logger,
   ILogger,
   Cluster,
@@ -12,7 +13,7 @@ import {
   orderedConnectStrategy,
   queuedReconnectStrategy
 } from "../index";
-import { Client, ClientOptions, EmbedOptions } from "eris";
+import { Client, ClientOptions, EmbedOptions, VERSION as ERISV } from "eris";
 import { ClusterQueue } from "./ClusterQueue";
 import { MasterIPC } from "../ipc/MasterIPC";
 import cluster, { Worker } from "cluster";
@@ -128,6 +129,7 @@ export class ClusterManager extends EventEmitter {
     this.logger = options.logger;
     this.clientBase = options.clientBase;
     this.clientOptions = options.clientOptions;
+    this.#shardCount = options.shardCountOverride;
     this.options = <ClusterManagerOptions>options;
 
     this.webhooks = {
@@ -348,11 +350,35 @@ export class ClusterManager extends EventEmitter {
 
         // Wait for all the clusters to identify
         await this._waitForClustersToIdentify();
-        console.log("Finished identifying clusters");
+        this.logger.info("Finished identifying clusters");
 
         // Run the connect strategy
         this.logger.info(`Connecting using the '${this.connectStrategy.name}' strategy`);
         await this.connectStrategy.run(this, this.clusterOptions);
+
+        if (this.options.showStartupStats) {
+          const { clusterIdOffset, firstShardId, lastShardId, guildsPerShard } =
+            this.options;
+
+          console.log();
+          this.logger.info("[Versions]");
+          this.logger.info(`Sharder Version: v${VERSION}`);
+          this.logger.info(`Eris Version: v${ERISV}`);
+          this.logger.info(`Node Version: ${process.version}`);
+
+          console.log();
+          this.logger.info("[Clusters]");
+          this.logger.info(`Cluster Count: ${this.clusterOptions.length}`);
+          this.logger.info(`First Cluster ID: ${clusterIdOffset}`);
+          this.logger.info(`Maximum Startup Time: ${this.#shardCount * 5}s`);
+
+          console.log();
+          this.logger.info("[Shards]");
+          this.logger.info(`Shard Count: ${this.#shardCount}`);
+          this.logger.info(`First Shard ID: ${firstShardId}`);
+          this.logger.info(`Last Shard ID: ${lastShardId}`);
+          this.logger.info(`Guilds per Shard: ${guildsPerShard}\n`);
+        }
       });
     } else {
       // Spawn a cluster on the worker process
