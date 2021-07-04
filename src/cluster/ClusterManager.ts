@@ -220,10 +220,17 @@ export class ClusterManager extends EventEmitter {
    * @param options The options for the cluster
    * @returns The cluster manager
    */
-  public addCluster(options: ClusterOptions): this {
+  public addCluster(options: AddClusterOptions): this {
     if (this.getClusterOptions(options.id))
       throw new Error("Cluster IDs must be unique.");
-    this.#clusterOptions.push(options);
+
+    const shardCount = options.lastShardId - options.firstShardId + 1;
+    const clusterOptions: ClusterOptions = {
+      ...options,
+      shardCount
+    };
+
+    this.#clusterOptions.push(clusterOptions);
     return this;
   }
 
@@ -360,10 +367,6 @@ export class ClusterManager extends EventEmitter {
         await this._waitForClustersToIdentify();
         this.logger.info("Finished identifying clusters");
 
-        // Run the connect strategy
-        this.logger.info(`Connecting using the '${this.connectStrategy.name}' strategy`);
-        await this.connectStrategy.run(this, this.#clusterOptions);
-
         // Log the information about the session
         if (this.options.showStartupStats) {
           const { clusterIdOffset, firstShardId, lastShardId, guildsPerShard } =
@@ -388,6 +391,10 @@ export class ClusterManager extends EventEmitter {
           this.logger.info(`Last Shard ID: ${lastShardId}`);
           this.logger.info(`Guilds per Shard: ${guildsPerShard}\n`);
         }
+
+        // Run the connect strategy
+        this.logger.info(`Connecting using the '${this.connectStrategy.name}' strategy`);
+        await this.connectStrategy.run(this, this.#clusterOptions);
       });
     } else {
       // Spawn a cluster on the worker process
@@ -577,3 +584,8 @@ export interface WebhookColorOptions {
 }
 
 export type WebhookType = "cluster" | "shard";
+
+export type AddClusterOptions = Pick<
+  ClusterOptions,
+  "id" | "name" | "firstShardId" | "lastShardId"
+>;
