@@ -326,12 +326,6 @@ export interface ShardStats {
   status: Shard["status"];
 }
 
-declare module "eris" {
-  export interface Client {
-    cluster: Cluster;
-  }
-}
-
 export interface ClusterOptions {
   id: number;
   workerId?: number;
@@ -346,4 +340,10 @@ export interface IdentifyPayload {
   firstShardId: number;
   lastShardId: number;
   shardCount: number;
+}
+
+declare module "eris" {
+  export interface Client {
+    cluster: Cluster;
+  }
 }
