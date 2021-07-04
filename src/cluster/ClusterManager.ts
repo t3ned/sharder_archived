@@ -514,7 +514,7 @@ export class ClusterManager extends EventEmitter {
    * @param p The promise
    */
   private _handleRejection(reason: Error, p: Promise<any>): void {
-    this.logger.error("Unhandled rejection at Promise:", p, "reason:", reason);
+    this.logger.error(`Unhandled rejection at Promise: ${p} reason: ${reason}`);
   }
 }
 
