@@ -89,7 +89,7 @@ export class Cluster {
       this.launchModule?.launch();
 
       process.send?.({
-        op: InternalIPCEvents.CONNECTED_SHARDS,
+        op: InternalIPCEvents.CLUSTER_READY,
         d: {}
       });
     });
@@ -117,11 +117,11 @@ export class Cluster {
     });
 
     // Connect all the shards when the cluster receives the payload
-    this.ipc.registerEvent(InternalIPCEvents.CONNECT_SHARDS, () => {
+    this.ipc.registerEvent(InternalIPCEvents.CONNECT_ALL, () => {
       this.client?.connect();
     });
 
-    this.ipc.registerEvent(InternalIPCEvents.CONNECT_SHARD, (data) => {
+    this.ipc.registerEvent(InternalIPCEvents.CONNECT_ONE, (data) => {
       const shardId = <number>data.shardId;
       if (shardId < this.firstShardId || shardId > this.lastShardId) return;
       const shard = client.shards.get(shardId);
