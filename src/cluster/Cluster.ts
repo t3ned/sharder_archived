@@ -332,6 +332,7 @@ export interface ClusterOptions {
   name?: string;
   firstShardId: number;
   lastShardId: number;
+  shardCount: number;
 }
 
 export interface IdentifyPayload {
