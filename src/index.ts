@@ -4,6 +4,7 @@ export * from "./struct/LaunchModule";
 export * from "./struct/Logger";
 export * from "./struct/Strategy";
 export * from "./util/Constants";
+export * from "./util/Util";
 export type { IPC, IPCMessage, IPCMessageOp } from "./ipc/IPC";
 export type { ClusterIPCCallback } from "./ipc/ClusterIPC";
 export type { MasterIPCCallback } from "./ipc/MasterIPC";
