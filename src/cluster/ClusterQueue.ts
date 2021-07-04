@@ -66,4 +66,6 @@ export class ClusterQueue extends EventEmitter {
 
 export interface ClusterQueue {
   on(event: "connectCluster", listener: (clusterOptions: ClusterOptions) => void): this;
+  once(event: "connectCluster", listener: (clusterOptions: ClusterOptions) => void): this;
+  once(event: "next", listener: () => void): this;
 }
