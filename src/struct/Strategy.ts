@@ -63,7 +63,7 @@ export function sharedClusterStrategy(): IClusterStrategy {
 }
 
 /**
- * The ordered connect strategy will connect the clusters in order of id.
+ * The ordered connect strategy will connect the clusters in order they were added.
  */
 export function orderedConnectStrategy(): IConnectStrategy {
   return {
@@ -77,7 +77,7 @@ export function orderedConnectStrategy(): IConnectStrategy {
 }
 
 /**
- * The queued reconnect strategy will connect ther clusters by queuing them in the cluster queue.
+ * The queued reconnect strategy will connect the clusters by queuing them in the cluster queue.
  */
 export function queuedReconnectStrategy(): IReconnectStrategy {
   return {

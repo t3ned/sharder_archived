@@ -9,7 +9,7 @@ export class MasterIPC extends IPC<MasterIPCCallback> {
   public manager!: ClusterManager;
 
   /**
-   * @param manager The cluster manager
+   * @param manager The cluster manager.
    */
   public constructor(manager: ClusterManager) {
     super({});

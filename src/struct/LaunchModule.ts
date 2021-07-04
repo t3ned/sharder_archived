@@ -7,7 +7,7 @@ export abstract class LaunchModule<T extends Client = Client> {
   public client!: T;
 
   /**
-   * @param client The client assigned to this launch module
+   * @param client The client assigned to this launch module.
    */
   public constructor(client: T) {
     Reflect.defineProperty(this, "client", { value: client });
@@ -32,7 +32,7 @@ export abstract class LaunchModule<T extends Client = Client> {
   }
 
   /**
-   * The cluster ipc asigned to this launch module.
+   * The cluster ipc assigned to this launch module.
    * @returns The cluster ipc
    */
   public get ipc() {
