@@ -51,13 +51,13 @@ export function sharedClusterStrategy(): IClusterStrategy {
       const { clusterIdOffset, firstShardId, lastShardId } = manager.options;
       await manager.fetchShardCount(true);
 
-      manager.addCluster({
-        id: clusterIdOffset,
-        firstShardId: firstShardId,
-        lastShardId: lastShardId
-      });
-
-      manager.startCluster(clusterIdOffset);
+      manager
+        .addCluster({
+          id: clusterIdOffset,
+          firstShardId: firstShardId,
+          lastShardId: lastShardId
+        })
+        .startCluster(clusterIdOffset);
     }
   };
 }
@@ -70,6 +70,16 @@ export function orderedConnectStrategy(): IConnectStrategy {
     name: "ordered",
     run: async (manager, clusters) => {
       for (const cluster of clusters) {
+        const callback = (clusterConfig: ClusterOptions) => {
+          const { id, shardCount } = cluster;
+          if (id !== clusterConfig.id) return;
+
+          manager.logger.info(`[C${id}] Connecting with ${shardCount} shards`);
+          manager.queue.off("connectCluster", callback);
+        };
+
+        manager.queue.on("connectCluster", callback);
+        // Push the cluster into the queue.
         manager.queue.enqueue(cluster);
       }
     }
