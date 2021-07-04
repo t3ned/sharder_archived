@@ -1,5 +1,6 @@
 import {
   VERSION,
+  Colors,
   Logger,
   ILogger,
   Cluster,
@@ -28,7 +29,7 @@ export class ClusterManager extends EventEmitter {
   public queue = new ClusterQueue();
 
   /**
-   * The rest client used for API calls.
+   * The rest client used for API requests.
    */
   public restClient!: Client;
 
@@ -38,32 +39,32 @@ export class ClusterManager extends EventEmitter {
   public logger: ILogger;
 
   /**
-   * The strategy the manager should use for spawning clusters.
+   * The strategy used for spawning clusters.
    */
   public clusterStrategy!: IClusterStrategy;
 
   /**
-   * The strategy the manager should use for connecting shards.
+   * The strategy used for connecting shards.
    */
   public connectStrategy!: IConnectStrategy;
 
   /**
-   * The strategy the manager should use for reconnecting shards.
+   * The strategy used for reconnecting shards.
    */
   public reconnectStrategy!: IReconnectStrategy;
 
   /**
-   * The token used for connecting to discord.
+   * The token used for connecting to Discord.
    */
   public token!: string;
 
   /**
-   * The client constructor that the manager should instantiate.
+   * The base Eris.Client constructor instantiated on each cluster.
    */
   public clientBase: typeof Client;
 
   /**
-   * The client options passed to the client.
+   * The options passed into the client.
    */
   public clientOptions: ClientOptions;
 
@@ -73,19 +74,19 @@ export class ClusterManager extends EventEmitter {
   public options: ClusterManagerOptions;
 
   /**
-   * The configuration for the webhooks.
+   * The webhook options.
    */
-  public webhooks: Webhooks;
-
-  /**
-   * The stats data produced by the manager.
-   */
-  public stats: ClusterManagerStats;
+  public webhookOptions: Webhooks;
 
   /**
    * The options for all the clusters.
    */
-  public clusterOptions: ClusterOptions[] = [];
+  #clusterOptions: ClusterOptions[] = [];
+
+  /**
+   * The stats produced by the clusters.
+   */
+  #stats: ClusterManagerStats;
 
   /**
    * The total shards the manager will connect.
@@ -93,8 +94,8 @@ export class ClusterManager extends EventEmitter {
   #shardCount: number = 0;
 
   /**
-   * @param token The token used for connecting to discord.
-   * @param options The options for the manager.
+   * @param token The token used for connecting to Discord.
+   * @param options The manager options.
    */
   public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
     super({});
@@ -132,19 +133,19 @@ export class ClusterManager extends EventEmitter {
     this.#shardCount = options.shardCountOverride;
     this.options = <ClusterManagerOptions>options;
 
-    this.webhooks = {
+    this.webhookOptions = {
       cluster: undefined,
       shard: undefined,
       ...options.webhooks,
       colors: {
-        success: 0x77dd77,
-        error: 0xff6961,
-        warning: 0xffb347,
+        success: Colors.SUCCESS,
+        error: Colors.ERROR,
+        warning: Colors.WARNING,
         ...options.webhooks?.colors
       }
     };
 
-    this.stats = {
+    this.#stats = {
       shards: 0,
       clustersIdentified: 0,
       guilds: 0,
@@ -206,12 +207,12 @@ export class ClusterManager extends EventEmitter {
   }
 
   /**
-   * Restarts a cluster.
+   * Restarts a worker process for a cluster.
    * @param worker The worker to restart
    * @param code The reason for exiting
    */
-  public restartCluster(_worker: Worker, _code = 1) {
-    // TODO
+  public restartCluster(_worker: Worker, _code = 1): void {
+    // TODO - handle exits and kill worker if still alive
   }
 
   /**
@@ -222,7 +223,7 @@ export class ClusterManager extends EventEmitter {
   public addCluster(options: ClusterOptions): this {
     if (this.getClusterOptions(options.id))
       throw new Error("Cluster IDs must be unique.");
-    this.clusterOptions.push(options);
+    this.#clusterOptions.push(options);
     return this;
   }
 
@@ -232,9 +233,16 @@ export class ClusterManager extends EventEmitter {
    * @returns The cluster manager
    */
   public removeCluster(clusterId: number): this {
-    const index = this.clusterOptions.findIndex((x) => x.id === clusterId);
-    if (index !== -1) this.clusterOptions.splice(index, 1);
+    const index = this.#clusterOptions.findIndex((x) => x.id === clusterId);
+    if (index !== -1) this.#clusterOptions.splice(index, 1);
     return this;
+  }
+
+  /**
+   * The options for all the clusters.
+   */
+  public get clusterOptions() {
+    return this.#clusterOptions;
   }
 
   /**
@@ -243,7 +251,7 @@ export class ClusterManager extends EventEmitter {
    * @returns The cluster options
    */
   public getClusterOptions(id: number): ClusterOptions | undefined {
-    return this.clusterOptions.find((x) => x.id === id);
+    return this.#clusterOptions.find((x) => x.id === id);
   }
 
   /**
@@ -252,7 +260,7 @@ export class ClusterManager extends EventEmitter {
    * @returns The cluster options
    */
   public getClusterOptionsByWorker(id: number): ClusterOptions | undefined {
-    return this.clusterOptions.find((x) => x.workerId === id);
+    return this.#clusterOptions.find((x) => x.workerId === id);
   }
 
   /**
@@ -303,17 +311,15 @@ export class ClusterManager extends EventEmitter {
       });
 
       masterIPC.registerEvent(InternalIPCEvents.HANDSHAKE, () => {
-        this.stats.clustersIdentified++;
+        this.#stats.clustersIdentified++;
 
-        if (this.stats.clustersIdentified === this.clusterOptions.length) {
-          this.emit("clustersIdentified", this.stats.clustersIdentified);
+        if (this.#stats.clustersIdentified === this.#clusterOptions.length) {
+          this.emit("clustersFinishedHandshaking", this.#stats.clustersIdentified);
         }
       });
 
-      masterIPC.registerEvent(InternalIPCEvents.CONNECTED_SHARDS, () => {
-        setTimeout(() => {
-          this.queue.next();
-        }, this.options.clusterTimeout);
+      masterIPC.registerEvent(InternalIPCEvents.CLUSTER_READY, () => {
+        setTimeout(() => this.queue.next(), this.options.clusterTimeout);
       });
 
       masterIPC.registerEvent(InternalIPCEvents.SEND_TO, (_, data) => {
@@ -327,7 +333,7 @@ export class ClusterManager extends EventEmitter {
 
       this.queue.on("connectCluster", (clusterOptions) => {
         masterIPC.sendTo(clusterOptions.id, {
-          op: InternalIPCEvents.CONNECT_SHARDS,
+          op: InternalIPCEvents.CONNECT_ALL,
           d: clusterOptions
         });
       });
@@ -345,7 +351,7 @@ export class ClusterManager extends EventEmitter {
         this.logger.info(`Clustering using the '${this.clusterStrategy.name}' strategy`);
         await this.clusterStrategy.run(this);
 
-        if (!this.clusterOptions.length)
+        if (!this.#clusterOptions.length)
           throw new Error("Cluster strategy failed to produce at least 1 cluster.");
 
         this.logger.info("Finished starting clusters, indentifying...");
@@ -356,8 +362,9 @@ export class ClusterManager extends EventEmitter {
 
         // Run the connect strategy
         this.logger.info(`Connecting using the '${this.connectStrategy.name}' strategy`);
-        await this.connectStrategy.run(this, this.clusterOptions);
+        await this.connectStrategy.run(this, this.#clusterOptions);
 
+        // Log the information about the session
         if (this.options.showStartupStats) {
           const { clusterIdOffset, firstShardId, lastShardId, guildsPerShard } =
             this.options;
@@ -370,7 +377,7 @@ export class ClusterManager extends EventEmitter {
 
           console.log();
           this.logger.info("[Clusters]");
-          this.logger.info(`Cluster Count: ${this.clusterOptions.length}`);
+          this.logger.info(`Cluster Count: ${this.#clusterOptions.length}`);
           this.logger.info(`First Cluster ID: ${clusterIdOffset}`);
           this.logger.info(`Maximum Startup Time: ${this.#shardCount * 5}s`);
 
@@ -406,7 +413,7 @@ export class ClusterManager extends EventEmitter {
    * @param embed The embed
    */
   public async sendWebhook(type: WebhookType, embed: EmbedOptions): Promise<void> {
-    const webhook = this.webhooks[type];
+    const webhook = this.webhookOptions[type];
     if (!webhook) return;
 
     return this.restClient.executeWebhook(webhook.id, webhook.token, {
@@ -416,7 +423,7 @@ export class ClusterManager extends EventEmitter {
 
   /**
    * Fetches the estimated guild count.
-   * @returns The estimated guild count
+   * @returns The guild count
    */
   public async fetchGuildCount(): Promise<number> {
     const sessionData = await this.restClient.getBotGateway().catch(() => null);
@@ -439,7 +446,7 @@ export class ClusterManager extends EventEmitter {
     const shardCount = Math.ceil(guildCount / guildsPerShard);
     const finalShardCount = Math.max(shardCountOverride, shardCount);
     if (set) this.setShardCount(finalShardCount);
-    return shardCount;
+    return finalShardCount;
   }
 
   /**
@@ -462,17 +469,18 @@ export class ClusterManager extends EventEmitter {
 
   /**
    * Resolves once all the clusters have identified.
+   * @returns A promise which resolves when the clusters have finished identifying
    */
   private _waitForClustersToIdentify(): Promise<void> {
     return new Promise((resolve) => {
-      this.once("clustersIdentified", () => {
+      this.once("clustersFinishedHandshaking", () => {
         resolve(void 0);
       });
     });
   }
 
   /**
-   * Resolves the logo print into a string from the file path.
+   * Resolves the logo from the file path into a string.
    * @returns The logo
    */
   private _getStartUpLogo(): string | null {
@@ -513,8 +521,8 @@ export class ClusterManager extends EventEmitter {
 export interface ClusterManager {
   on(event: "stats", listener: (stats: ClusterManagerStats) => void): this;
   once(event: "stats", listener: (stats: ClusterManagerStats) => void): this;
-  on(event: "clustersIdentified", listener: (clusters: number) => void): this;
-  once(event: "clustersIdentified", listener: (clusters: number) => void): this;
+  on(event: "clustersFinishedHandshaking", listener: (clusters: number) => void): this;
+  once(event: "clustersFinishedHandshaking", listener: (clusters: number) => void): this;
 }
 
 export interface ClusterManagerOptions {
