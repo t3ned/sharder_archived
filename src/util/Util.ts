@@ -1,3 +1,6 @@
+import type { IPCMessageOp } from "../index";
+import { randomBytes } from "crypto";
+
 /**
  * Splits the shards into evenly spread chunks
  * @param clusterCount The number of clusters
@@ -37,4 +40,13 @@ export function chunkArray<T = any>(chunkCount: number, array: T[]): T[][] {
   }
 
   return chunked;
+}
+
+/**
+ * Generates a unique id used in an ipc fetch request.
+ * @param id The id of the fetch
+ * @returns The generated id
+ */
+export function generateFetchId(op: IPCMessageOp) {
+  return `ipc.${op}.${randomBytes(8).toString("hex")}`;
 }
