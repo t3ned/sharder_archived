@@ -10,7 +10,12 @@ export enum InternalIPCEvents {
   HANDSHAKE,
   CONNECT_ALL,
   CONNECT_ONE,
-  CLUSTER_READY
+  CLUSTER_READY,
+  FETCH_GUILD,
+  FETCH_CHANNEL,
+  FETCH_MEMBER,
+  FETCH_USER,
+  FETCH_RETURN
 }
 
 export enum Colors {
