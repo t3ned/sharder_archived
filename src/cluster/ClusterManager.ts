@@ -1,102 +1,153 @@
-import type { APIRequestError, InternalIPCMessage } from "../struct/IPC";
-import { Client, ClientOptions, EmbedOptions } from "eris";
-import { Cluster, ClusterStats, RawCluster } from "./Cluster";
-
-import { EventEmitter } from "events";
-import { isMaster, setupMaster, fork, workers, on, Worker } from "cluster";
-import { cpus } from "os";
-import { readFileSync } from "fs";
-
+import {
+  VERSION,
+  Colors,
+  Logger,
+  ILogger,
+  Cluster,
+  ClusterStats,
+  ClusterOptions,
+  InternalIPCEvents,
+  IClusterStrategy,
+  IConnectStrategy,
+  IReconnectStrategy,
+  sharedClusterStrategy,
+  orderedConnectStrategy,
+  queuedReconnectStrategy
+} from "../index";
+import { Client, ClientOptions, EmbedOptions, VERSION as ERISV } from "eris";
 import { ClusterQueue } from "./ClusterQueue";
-import { Logger, LoggerOptions } from "@nedbot/logger";
+import { MasterIPC } from "../ipc/MasterIPC";
+import cluster, { Worker } from "cluster";
+import { EventEmitter } from "events";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 export class ClusterManager extends EventEmitter {
+  /**
+   * The first-in-first-out cluster queue.
+   */
   public queue = new ClusterQueue();
-  public clientOptions!: ClientOptions;
-  public clientBase: typeof Client;
+
+  /**
+   * The rest client used for API requests.
+   */
   public restClient!: Client;
-  public logger: Logger;
 
+  /**
+   * The logger used by the manager.
+   */
+  public logger: ILogger;
+
+  /**
+   * The strategy used for spawning clusters.
+   */
+  public clusterStrategy!: IClusterStrategy;
+
+  /**
+   * The strategy used for connecting shards.
+   */
+  public connectStrategy!: IConnectStrategy;
+
+  /**
+   * The strategy used for reconnecting shards.
+   */
+  public reconnectStrategy!: IReconnectStrategy;
+
+  /**
+   * The token used for connecting to Discord.
+   */
   public token!: string;
-  public printLogoPath: string;
-  public launchModulePath: string;
-  public webhooks: Webhooks;
-  public debug: boolean;
 
-  // Manager shard values
-  public shardCount: number | "auto";
-  public firstShardID: number;
-  public lastShardID: number;
-  public guildsPerShard: number;
+  /**
+   * The base Eris.Client constructor instantiated on each cluster.
+   */
+  public clientBase: typeof Client;
 
-  // Manager cluster values
-  public firstClusterID: number;
-  public clusterCount: number | "auto";
-  public clusterTimeout: number;
-  public shardsPerCluster: number;
-  public ipcTimeout: number;
+  /**
+   * The options passed into the client.
+   */
+  public clientOptions: ClientOptions;
 
-  // Manager stats values
-  public statsUpdateInterval: number;
-  public stats: ClusterManagerStats;
+  /**
+   * The manager options.
+   */
+  public options: ClusterManagerOptions;
 
-  // Loaded worker cache
-  public clusters = new Map<number, RawCluster>();
-  public workers = new Map<number, number>();
-  public callbacks = new Map<string, number>();
+  /**
+   * The webhook options.
+   */
+  public webhookOptions: Webhooks;
 
-  public constructor(
-    token: string,
-    launchModulePath: string,
-    options: Partial<ClusterManagerOptions> = {}
-  ) {
-    super();
+  /**
+   * The options for all the clusters.
+   */
+  #clusterOptions: ClusterOptions[] = [];
 
-    // Hide the token when the manager is logged
-    Object.defineProperty(this, "token", { value: token });
-    Object.defineProperty(this, "restClient", { value: new Client(this.token) });
-    Object.defineProperty(this, "clientOptions", {
-      value: options.clientOptions ?? {}
-    });
+  /**
+   * The stats produced by the clusters.
+   */
+  #stats: ClusterManagerStats;
 
-    this.clientBase = options.client ?? Client;
-    this.printLogoPath = options.printLogoPath ?? "";
-    this.launchModulePath = launchModulePath;
-    this.debug = options.debug ?? false;
+  /**
+   * The total shards the manager will connect.
+   */
+  #shardCount: number = 0;
 
-    // Assign default values to missing config props
-    this.shardCount = options.shardCount ?? "auto";
-    this.firstShardID = options.firstShardID ?? 0;
-    this.lastShardID = options.lastShardID ?? 0;
-    this.guildsPerShard = options.guildsPerShard ?? 1500;
+  /**
+   * @param token The token used for connecting to Discord.
+   * @param options The manager options.
+   */
+  public constructor(token: string, options: Partial<ClusterManagerOptions> = {}) {
+    super({});
 
-    this.firstClusterID = options.firstClusterID ?? 0;
-    this.clusterCount = options.clusterCount || "auto";
-    this.clusterTimeout = options.clusterTimeout ?? 5000;
-    this.shardsPerCluster = options.shardsPerCluster ?? 0;
-    this.ipcTimeout = options.ipcTimeout ?? 30000;
+    const restClient = new Client(token, { restMode: true });
 
-    this.statsUpdateInterval = options.statsUpdateInterval ?? 0;
+    Reflect.defineProperty(this, "restClient", { value: restClient });
+    Reflect.defineProperty(this, "token", { value: token });
 
-    this.webhooks = {
+    options.logger = options.logger ?? new Logger();
+    options.clientBase = options.clientBase ?? Client;
+    options.clientOptions = options.clientOptions ?? {};
+    options.startUpLogoPath = options.startUpLogoPath ?? "";
+    options.launchModulePath = options.launchModulePath ?? "";
+    options.debugMode = options.debugMode ?? false;
+    options.useSyncedRequestHandler = options.useSyncedRequestHandler ?? true;
+    options.showStartupStats = options.showStartupStats ?? true;
+
+    options.shardCountOverride = options.shardCountOverride ?? 0;
+    options.firstShardId = options.firstShardId ?? 0;
+    options.lastShardId =
+      options.lastShardId ??
+      (options.shardCountOverride > 0 ? options.shardCountOverride - 1 : 0);
+    options.guildsPerShard = options.guildsPerShard ?? 1500;
+
+    options.clusterIdOffset = options.clusterIdOffset ?? 0;
+    options.clusterTimeout = options.clusterTimeout ?? 5000;
+    options.ipcTimeout = options.ipcTimeout ?? 15000;
+
+    options.statsUpdateInterval = options.statsUpdateInterval ?? 0;
+
+    this.logger = options.logger;
+    this.clientBase = options.clientBase;
+    this.clientOptions = options.clientOptions;
+    this.#shardCount = options.shardCountOverride;
+    this.options = <ClusterManagerOptions>options;
+
+    this.webhookOptions = {
       cluster: undefined,
       shard: undefined,
-      colors: { success: 0x77dd77, error: 0xff6961, warning: 0xffb347 },
-      ...options.webhooks
+      ...options.webhooks,
+      colors: {
+        success: Colors.SUCCESS,
+        error: Colors.ERROR,
+        warning: Colors.WARNING,
+        ...options.webhooks?.colors
+      }
     };
 
-    // Initialise a logger
-    this.logger = new Logger(
-      options.loggerOptions ?? {
-        enableErrorLogs: false,
-        enableInfoLogs: false
-      }
-    );
-
-    // Initialise the stats
-    this.stats = {
+    this.#stats = {
       shards: 0,
-      clustersLaunched: 0,
+      clustersIdentified: 0,
       guilds: 0,
       users: 0,
       channels: 0,
@@ -105,523 +156,409 @@ export class ClusterManager extends EventEmitter {
       clusters: []
     };
 
-    // Launch the manager
-    this.launchClusters();
+    // Set default strategies
+    this.setClusterStrategy(sharedClusterStrategy());
+    this.setConnectStrategy(orderedConnectStrategy());
+    this.setReconnectStrategy(queuedReconnectStrategy());
   }
 
   /**
-   * Launches all the clusters
+   * Sets the strategy to use for starting clusters.
+   * @param strategy The strategy
+   * @returns The cluster manager
    */
-  public launchClusters() {
-    if (isMaster) {
-      this.printLogo();
+  public setClusterStrategy(strategy: IClusterStrategy): this {
+    this.clusterStrategy = strategy;
+    return this;
+  }
 
-      process.on("uncaughtException", (error) => {
-        this.logger.error("Cluster Manager", error);
+  /**
+   * Sets the strategy to use for connecting clusters.
+   * @param strategy The strategy
+   * @returns The cluster manager
+   */
+  public setConnectStrategy(strategy: IConnectStrategy): this {
+    this.connectStrategy = strategy;
+    return this;
+  }
+
+  /**
+   * Sets the strategy to use for reconnecting clusters.
+   * @param strategy The strategy
+   * @returns The cluster manager
+   */
+  public setReconnectStrategy(strategy: IReconnectStrategy): this {
+    this.reconnectStrategy = strategy;
+    return this;
+  }
+
+  /**
+   * Starts a worker process for a cluster.
+   * @param clusterId The id of the cluster
+   */
+  public startCluster(clusterId: number): void {
+    const clusterOptions = this.getClusterOptions(clusterId);
+    if (!clusterOptions) return;
+
+    const worker = cluster.fork();
+    clusterOptions.workerId = worker.id;
+
+    this.logger.info(`Started cluster ${clusterId}`);
+  }
+
+  /**
+   * Restarts a worker process for a cluster.
+   * @param worker The worker to restart
+   * @param code The reason for exiting
+   */
+  public restartCluster(_worker: Worker, _code = 1): void {
+    // TODO - handle exits and kill worker if still alive
+  }
+
+  /**
+   * Adds a cluster's options to the clusters to launch.
+   * @param options The options for the cluster
+   * @returns The cluster manager
+   */
+  public addCluster(options: AddClusterOptions): this {
+    if (this.getClusterOptions(options.id))
+      throw new Error("Cluster IDs must be unique.");
+
+    const shardCount = options.lastShardId - options.firstShardId + 1;
+    const clusterOptions: ClusterOptions = {
+      ...options,
+      shardCount
+    };
+
+    this.#clusterOptions.push(clusterOptions);
+    return this;
+  }
+
+  /**
+   * Removes a cluster's options from the clusters to launch.
+   * @param clusterId The id of the cluster
+   * @returns The cluster manager
+   */
+  public removeCluster(clusterId: number): this {
+    const index = this.#clusterOptions.findIndex((x) => x.id === clusterId);
+    if (index !== -1) this.#clusterOptions.splice(index, 1);
+    return this;
+  }
+
+  /**
+   * The options for all the clusters.
+   */
+  public get clusterOptions() {
+    return this.#clusterOptions;
+  }
+
+  /**
+   * Gets a cluster's options from a cluster id.
+   * @param id The id of the cluster
+   * @returns The cluster options
+   */
+  public getClusterOptions(id: number): ClusterOptions | undefined {
+    return this.#clusterOptions.find((x) => x.id === id);
+  }
+
+  /**
+   * Gets a cluster's options from a worker id.
+   * @param id The id of the worker
+   * @returns The cluster options
+   */
+  public getClusterOptionsByWorker(id: number): ClusterOptions | undefined {
+    return this.#clusterOptions.find((x) => x.workerId === id);
+  }
+
+  /**
+   * Launches all the clusters.
+   */
+  public launch(): void {
+    if (this.isMaster) {
+      process.on("uncaughtException", this._handleException.bind(this));
+      process.on("unhandledRejection", this._handleRejection.bind(this));
+
+      const masterIPC = new MasterIPC(this);
+
+      masterIPC.registerEvent(InternalIPCEvents.LOG, (_, data) => {
+        this.logger.info(data);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.INFO, (_, data) => {
+        this.logger.info(data);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.DEBUG, (_, data) => {
+        if (!this.options.debugMode) return;
+        this.logger.debug(data);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.WARN, (_, data) => {
+        this.logger.warn(data);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.ERROR, (_, data) => {
+        this.logger.error(data);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.IDENTIFY, (_, data) => {
+        const clusterOptions = this.getClusterOptionsByWorker(data.workerId);
+        if (!clusterOptions) return;
+
+        masterIPC.sendTo(clusterOptions.id, {
+          op: InternalIPCEvents.IDENTIFY,
+          d: {
+            clusterName: clusterOptions.name,
+            clusterId: clusterOptions.id,
+            firstShardId: clusterOptions.firstShardId,
+            lastShardId: clusterOptions.lastShardId,
+            shardCount: this.shardCount
+          }
+        });
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.HANDSHAKE, () => {
+        this.#stats.clustersIdentified++;
+
+        if (this.#stats.clustersIdentified === this.#clusterOptions.length) {
+          this.emit("clustersFinishedHandshaking", this.#stats.clustersIdentified);
+        }
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.CLUSTER_READY, () => {
+        setTimeout(() => this.queue.next(), this.options.clusterTimeout);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.SEND_TO, (_, data) => {
+        if (isNaN(data.clusterId) || !data.message) return;
+        masterIPC.sendTo(data.clusterId, data.message);
+      });
+
+      masterIPC.registerEvent(InternalIPCEvents.BROADCAST, (_, data) => {
+        masterIPC.broadcast(data);
+      });
+
+      this.queue.on("connectCluster", (clusterOptions) => {
+        masterIPC.sendTo(clusterOptions.id, {
+          op: InternalIPCEvents.CONNECT_ALL,
+          d: clusterOptions
+        });
       });
 
       process.nextTick(async () => {
-        this.logger.info("Cluster Manager", "Initialising clusters...");
+        console.clear();
 
-        // Validate the cluster and shard counts
-        this.shardCount = await this.validateShardCount();
-        this.clusterCount = this.calculateClusterCount();
-        this.lastShardID ||= this.shardCount - 1;
+        const logo = this._getStartUpLogo();
+        if (logo) console.log(`${logo}\n`);
 
-        this.logger.info(
-          "Cluster Manager",
-          `Starting ${this.clusterCount} clusters with ${this.shardCount} shards`
-        );
+        this.logger.info("Initialising clusters...");
+        cluster.setupMaster({ silent: false });
 
-        const embed = {
-          title: `Launching ${this.clusterCount} clusters`,
-          description: `Preparing ${this.shardCount} shards`,
-          color: this.webhooks.colors!.success
-        };
+        // Run the cluster strategy
+        this.logger.info(`Clustering using the '${this.clusterStrategy.name}' strategy`);
+        await this.clusterStrategy.run(this);
 
-        this.sendWebhook("cluster", embed);
-        setupMaster({ silent: false });
+        if (!this.#clusterOptions.length)
+          throw new Error("Cluster strategy failed to produce at least 1 cluster.");
 
-        // Start the workers starting from the first id
-        this.startCluster(this.firstClusterID);
+        this.logger.info("Finished starting clusters, indentifying...");
+
+        // Wait for all the clusters to identify
+        await this._waitForClustersToIdentify();
+        this.logger.info("Finished identifying clusters");
+
+        // Log the information about the session
+        if (this.options.showStartupStats) {
+          const { clusterIdOffset, firstShardId, lastShardId, guildsPerShard } =
+            this.options;
+
+          console.log();
+          this.logger.info("[Versions]");
+          this.logger.info(`Sharder Version: v${VERSION}`);
+          this.logger.info(`Eris Version: v${ERISV}`);
+          this.logger.info(`Node Version: ${process.version}`);
+
+          console.log();
+          this.logger.info("[Clusters]");
+          this.logger.info(`Cluster Count: ${this.#clusterOptions.length}`);
+          this.logger.info(`First Cluster ID: ${clusterIdOffset}`);
+          this.logger.info(`Maximum Startup Time: ${this.#shardCount * 5}s`);
+
+          console.log();
+          this.logger.info("[Shards]");
+          this.logger.info(`Shard Count: ${this.#shardCount}`);
+          this.logger.info(`First Shard ID: ${firstShardId}`);
+          this.logger.info(`Last Shard ID: ${lastShardId}`);
+          this.logger.info(`Guilds per Shard: ${guildsPerShard}\n`);
+        }
+
+        // Run the connect strategy
+        this.logger.info(`Connecting using the '${this.connectStrategy.name}' strategy`);
+        await this.connectStrategy.run(this, this.#clusterOptions);
       });
     } else {
-      // Spawn a cluster
+      // Spawn a cluster on the worker process
       const cluster = new Cluster(this);
       cluster.spawn();
     }
 
-    on("message", async (worker, message: InternalIPCMessage) => {
-      if (!message.eventName) return;
-
-      const clusterID = this.workers.get(worker.id)!;
-
-      switch (message.eventName) {
-        case "log":
-          this.logger.info(`Cluster ${clusterID}`, `${message.message}`);
-          break;
-
-        case "debug":
-          if (this.debug) {
-            this.logger.debug(`Cluster ${clusterID}`, `${message.message}`);
-          }
-          break;
-
-        case "info":
-          this.logger.info(`Cluster ${clusterID}`, `${message.message}`);
-          break;
-
-        case "warn":
-          this.logger.warn(`Cluster ${clusterID}`, `${message.message}`);
-          break;
-
-        case "error":
-          this.logger.error(`Cluster ${clusterID}`, `${message.message}`);
-          break;
-
-        case "shardsStarted":
-          // All shards from the previous cluster have started
-          // so move to the next cluster in the queue
-          this.queue.next();
-          if (this.queue.length)
-            setTimeout(() => this.queue.execute(), this.clusterTimeout);
-          break;
-
-        case "statsUpdate": {
-          // Add stats to the total stats
-          message.stats.id = clusterID;
-          this.stats.ramUsage += message.stats.ramUsage;
-          this.stats.guilds += message.stats.guilds;
-          this.stats.users += message.stats.users;
-          this.stats.shards += message.stats.shards;
-          this.stats.channels += message.stats.channels;
-          this.stats.voiceConnections += message.stats.voiceConnections;
-          this.stats.clusters.push(message.stats);
-          this.stats.clustersLaunched++;
-
-          // Emit the stats' event if all clusters have sent their stats
-          if (this.stats.clustersLaunched === this.clusters.size) {
-            this.stats.clusters = this.stats.clusters.sort((a, b) => a.id - b.id);
-
-            this.emit("stats", this.stats);
-          }
-          break;
-        }
-
-        case "fetchGuild":
-        case "fetchChannel":
-        case "fetchUser":
-          // Fetch the cached value from each cluster
-          this.fetchInfo(0, message.eventName, message.id);
-          this.callbacks.set(message.id, clusterID);
-          break;
-
-        case "fetchMember":
-          this.fetchInfo(0, message.eventName, [message.guildID, message.id]);
-          this.callbacks.set(message.id, clusterID);
-          break;
-
-        // Send the cached value back to the cluster
-        case "fetchReturn":
-          const callback = this.callbacks.get(message.value.id)!;
-          const cluster = this.clusters.get(callback);
-
-          if (cluster) {
-            workers[cluster.workerID]!.send({
-              eventName: "fetchReturn",
-              id: message.value.id,
-              value: message.value
-            });
-
-            this.callbacks.delete(message.value.id);
-          }
-          break;
-
-        // Sends a message to all the clusters
-        case "broadcast":
-          this.broadcast(0, message.message);
-          break;
-
-        // Sends a message to a specific cluster
-        case "send":
-          this.sendTo(message.clusterID, message.message);
-          break;
-
-        // Handle api requests sent from the request handler
-        case "apiRequest":
-          try {
-            const data = await this.restClient.requestHandler.request(
-              message.method,
-              message.url,
-              message.auth,
-              message.body,
-              message.file,
-              message.route,
-              message.short
-            );
-
-            this.sendTo(clusterID, {
-              eventName: `apiResponse.${message.requestID}`,
-              data
-            });
-          } catch (e) {
-            const error: APIRequestError = {
-              code: e.code,
-              message: e.message,
-              stack: e.stack
-            };
-
-            this.sendTo(clusterID, {
-              eventName: `apiResponse.${message.requestID}`,
-              error
-            });
-          }
-          break;
-      }
-    });
-
-    // Restart a cluster if it dies
-    on("exit", (worker, code) => {
-      this.restartCluster(worker, code);
-    });
-
-    // Ensure shards connect when the next queue item is ready
-    this.queue.on("execute", (item) => {
-      const cluster = this.clusters.get(item.clusterID);
-      if (cluster) {
-        const worker = workers[cluster.workerID]!;
-        worker.send({ ...item, eventName: "connect" });
-      }
-    });
+    // Restart a cluster on exit
+    cluster.on("exit", this.restartCluster.bind(this));
   }
 
   /**
-   * Returns true if the process is the master process
+   * Checks whether or not the process is the master process.
+   * @returns Whether or not the process is the master process.
    */
-  public isMaster() {
-    return isMaster;
+  public get isMaster() {
+    return cluster.isMaster;
   }
 
   /**
-   * Restarts a cluster
-   * @param worker The worker to restart
-   * @param code The reason for exiting
+   * Sends a webhook embed.
+   * @param type The type of webhook
+   * @param embed The embed
    */
-  private restartCluster(worker: Worker, code = 1) {
-    const clusterID = this.workers.get(worker.id)!;
-    const cluster = this.clusters.get(clusterID)!;
-
-    this.logger.error("Cluster Manager", `Cluster ${clusterID} died with code ${code}`);
-    this.logger.warn("Cluster Manager", `Restarting cluster ${clusterID}...`);
-
-    const embed = {
-      title: `Cluster ${clusterID} died with code ${code}`,
-      description: `Restarting shards ${cluster.firstShardID} - ${cluster.lastShardID}`,
-      color: this.webhooks.colors!.error
-    };
-
-    this.sendWebhook("cluster", embed);
-
-    const newWorker = fork();
-
-    this.workers.delete(worker.id);
-    this.workers.set(newWorker.id, clusterID);
-    this.clusters.set(clusterID, Object.assign(cluster, { workerID: newWorker.id }));
-
-    this.sendTo(clusterID, { eventName: "statusUpdate", status: "QUEUED" });
-
-    this.queue.enqueue({
-      clusterID,
-      token: this.token,
-      clusterCount: <number>this.clusterCount,
-      shardCount: cluster.shardCount,
-      firstShardID: cluster.firstShardID,
-      lastShardID: cluster.lastShardID
-    });
-  }
-
-  /**
-   * Read and print the logo from the file
-   */
-  private printLogo() {
-    const rootPath = process.cwd().replace(`\\`, "/");
-    const pathToFile = `${rootPath}/${this.printLogoPath}`;
-
-    try {
-      console.clear();
-      console.log(readFileSync(pathToFile, "utf-8"));
-    } catch (error) {
-      if (this.printLogoPath)
-        this.logger.warn("General", `Failed to locate logo file: ${pathToFile}`);
-    }
-  }
-
-  /**
-   * Fetches data from the client cache
-   * @param start The initial cluster id to start fetching
-   * @param eventName The type of data to fetch
-   * @param value The lookup value
-   */
-  public fetchInfo(start: number, eventName: string, value: string | string[]) {
-    const cluster = this.clusters.get(start);
-
-    if (cluster) {
-      const worker = workers[cluster.workerID]!;
-      worker.send({ eventName, value });
-      this.fetchInfo(start + 1, eventName, value);
-    }
-  }
-
-  /**
-   * Updates the cluster stats
-   * @param clusters The workers to update the stats for
-   * @param start The initial cluster id to start updating
-   */
-  public updateStats(clusters: Worker[], start: number) {
-    const worker = clusters[start];
-
-    if (worker) {
-      worker.send({ eventName: "statsUpdate" });
-      this.updateStats(clusters, ++start);
-    }
-  }
-
-  /**
-   * Sends a message to all clusters
-   * @param start The initial cluster id to start sending
-   * @param message The message to send to the cluster
-   */
-  public broadcast(start: number, message: InternalIPCMessage) {
-    const cluster = this.clusters.get(start);
-
-    if (cluster) {
-      const worker = workers[cluster.workerID]!;
-      worker.send(message);
-      this.broadcast(++start, message);
-    }
-  }
-
-  /**
-   * Sends a message to the specified cluster
-   * @param clusterID The cluster id to send to
-   * @param message The message to send to the cluster
-   */
-  public sendTo(clusterID: number, message: InternalIPCMessage) {
-    const cluster = this.clusters.get(clusterID)!;
-    const worker = workers[cluster.workerID];
-    if (worker) worker.send(message);
-  }
-
-  /**
-   * Starts updating the cluster stats
-   */
-  private startStatsUpdate() {
-    if (!this.statsUpdateInterval) return;
-    setInterval(() => {
-      this.stats = {
-        shards: 0,
-        clustersLaunched: 0,
-        guilds: 0,
-        users: 0,
-        channels: 0,
-        ramUsage: 0,
-        voiceConnections: 0,
-        clusters: []
-      };
-
-      const clusters = <Worker[]>Object.values(workers).filter(Boolean);
-      this.updateStats(clusters, 0);
-    }, this.statsUpdateInterval);
-  }
-
-  /**
-   * Forks a worker and assigns it to the cluster passed
-   * @param clusterID
-   */
-  private startCluster(clusterID: number) {
-    if (clusterID - this.firstClusterID === this.clusterCount)
-      return this.connectShards();
-
-    // Fork a worker
-    const worker = fork();
-
-    // Cache this worker
-    this.workers.set(worker.id, clusterID);
-    this.clusters.set(clusterID, {
-      workerID: worker.id,
-      shardCount: 0,
-      firstShardID: 0,
-      lastShardID: 0
-    });
-
-    this.logger.info("Cluster Manager", `Started cluster ${clusterID}`);
-
-    // Start next cluster
-    this.startCluster(++clusterID);
-  }
-
-  /**
-   * Connects the shards to the discord gateway
-   */
-  private connectShards() {
-    this.logger.info("Cluster Manager", "Started all clusters, connecting shards...");
-
-    this.chunkShards();
-
-    // Queue each cluster for connection
-    for (let i = 0; i < this.clusterCount; i++) {
-      const clusterID = this.firstClusterID + i;
-      const cluster = this.clusters.get(clusterID)!;
-
-      if (cluster.shardCount) {
-        this.sendTo(clusterID, {
-          eventName: "statusUpdate",
-          status: "QUEUED"
-        });
-
-        this.queue.enqueue({
-          clusterID,
-          token: this.token,
-          clusterCount: <number>this.clusterCount,
-          shardCount: cluster.shardCount,
-          firstShardID: cluster.firstShardID,
-          lastShardID: cluster.lastShardID
-        });
-      }
-    }
-
-    this.logger.info("Cluster Manager", "All shards spread");
-    this.startStatsUpdate();
-  }
-
-  /**
-   * Splits the shards across all the clusters
-   */
-  private chunkShards() {
-    const shards: number[] = [];
-    const chunked: number[][] = [];
-
-    // Fill the shards array with shard IDs from firstShardID to lastShardID
-    for (let shardID = this.firstShardID; shardID <= this.lastShardID; shardID++)
-      shards.push(shardID);
-
-    // Split the shards into their clusters
-    let clusterCount = <number>this.clusterCount;
-    let size = 0;
-    let i = 0;
-
-    // Split the shards into clusters
-    if (shards.length % clusterCount === 0) {
-      size = Math.floor(shards.length / clusterCount);
-      while (i < shards.length) chunked.push(shards.slice(i, (i += size)));
-    } else {
-      while (i < shards.length) {
-        size = Math.ceil((shards.length - i) / clusterCount--);
-        chunked.push(shards.slice(i, (i += size)));
-      }
-    }
-
-    // Cache the details for each cluster
-    for (const [i, chunk] of chunked.entries()) {
-      const clusterID = this.firstClusterID + i;
-      const cluster = this.clusters.get(clusterID);
-
-      this.clusters.set(
-        clusterID,
-        Object.assign(cluster, {
-          firstShardID: Math.min(...chunk),
-          lastShardID: Math.max(...chunk),
-          shardCount: chunk.length
-        })
-      );
-    }
-
-    return chunked;
-  }
-
-  /**
-   * Ensures a valid shardCount is provided
-   */
-  private async validateShardCount() {
-    const { shards } = await this.restClient.getBotGateway();
-    const { shardCount, guildsPerShard } = this;
-
-    if (typeof shardCount === "number") {
-      if (shardCount < shards)
-        throw new TypeError(`Invalid \`shardCount\` provided. Recommended: ${shards}`);
-      // Provided shardCount is valid
-      return shardCount;
-    }
-
-    // Calculate the total shards when shardCount is set to auto
-    const maxPossibleGuildCount = shards * 1000;
-    const shardCountDecimal = maxPossibleGuildCount / guildsPerShard;
-    return Math.ceil(shardCountDecimal);
-  }
-
-  /**
-   * Calculates the total clusters to launch
-   */
-  private calculateClusterCount() {
-    const { clusterCount, shardsPerCluster, shardCount } = this;
-
-    // Provided clusterCount is valid
-    if (typeof clusterCount === "number") {
-      if (shardsPerCluster && clusterCount * shardsPerCluster < shardCount)
-        throw new TypeError(
-          `Invalid \`shardsPerCluster\` provided. \`shardCount\` should be >= \`clusterCount\` * \`shardsPerCluster\``
-        );
-      return clusterCount;
-    }
-
-    // Use the count of cpus to determine cluster count
-    if (shardsPerCluster === 0) return cpus().length;
-
-    // Calculate the total clusters with the configured options
-    const clusterCountDecimal = <number>shardCount / shardsPerCluster;
-    return Math.ceil(clusterCountDecimal);
-  }
-
-  public sendWebhook(type: "cluster" | "shard", embed: EmbedOptions) {
-    const webhook = this.webhooks[type];
+  public async sendWebhook(type: WebhookType, embed: EmbedOptions): Promise<void> {
+    const webhook = this.webhookOptions[type];
     if (!webhook) return;
 
-    const { id, token } = webhook;
-    return this.restClient.executeWebhook(id, token, { embeds: [embed] });
+    return this.restClient.executeWebhook(webhook.id, webhook.token, {
+      embeds: [embed]
+    });
+  }
+
+  /**
+   * Fetches the estimated guild count.
+   * @returns The guild count
+   */
+  public async fetchGuildCount(): Promise<number> {
+    const sessionData = await this.restClient.getBotGateway().catch(() => null);
+    if (!sessionData || !sessionData.shards)
+      throw new Error("Failed to fetch guild count.");
+
+    this.logger.info(`Discord recommended ${sessionData.shards} shards`);
+    return sessionData.shards * 1000;
+  }
+
+  /**
+   * Fetches the recommended number of shards to spawn.
+   * @param set Whether or not the shard count should be set on the manager
+   * @returns The shard count
+   */
+  public async fetchShardCount(set: boolean = true): Promise<number> {
+    const guildCount = await this.fetchGuildCount();
+    const { guildsPerShard, shardCountOverride } = this.options;
+
+    const shardCount = Math.ceil(guildCount / guildsPerShard);
+    const finalShardCount = Math.max(shardCountOverride, shardCount);
+    if (set) this.setShardCount(finalShardCount);
+    return finalShardCount;
+  }
+
+  /**
+   * Sets the shard count.
+   * @param shardCount The shard count
+   * @returns The cluster manager
+   */
+  public setShardCount(shardCount: number) {
+    this.#shardCount = shardCount;
+    return this;
+  }
+
+  /**
+   * Gets the shard count.
+   * @returns The shard count
+   */
+  public get shardCount() {
+    return this.#shardCount;
+  }
+
+  /**
+   * Resolves once all the clusters have identified.
+   * @returns A promise which resolves when the clusters have finished identifying
+   */
+  private _waitForClustersToIdentify(): Promise<void> {
+    return new Promise((resolve) => {
+      this.once("clustersFinishedHandshaking", () => {
+        resolve(void 0);
+      });
+    });
+  }
+
+  /**
+   * Resolves the logo from the file path into a string.
+   * @returns The logo
+   */
+  private _getStartUpLogo(): string | null {
+    const path = join(process.cwd(), this.options.startUpLogoPath);
+
+    try {
+      const logo = readFileSync(path, "utf-8");
+      if (logo && logo.length > 0) return logo;
+      return null;
+    } catch (error) {
+      if (this.options.startUpLogoPath) {
+        this.logger.error(`Failed to locate logo file: ${path}`);
+        process.exit(1);
+      }
+
+      return null;
+    }
+  }
+
+  /**
+   * Handles an unhandled exception.
+   * @param error The error
+   */
+  private _handleException(error: Error): void {
+    this.logger.error(error);
+  }
+
+  /**
+   * Handles unhandled promise rejections.
+   * @param reason The reason why the promise was rejected
+   * @param p The promise
+   */
+  private _handleRejection(reason: Error, p: Promise<any>): void {
+    this.logger.error(`Unhandled rejection at Promise: ${p} reason: ${reason}`);
   }
 }
 
 export interface ClusterManager {
   on(event: "stats", listener: (stats: ClusterManagerStats) => void): this;
   once(event: "stats", listener: (stats: ClusterManagerStats) => void): this;
+  on(event: "clustersFinishedHandshaking", listener: (clusters: number) => void): this;
+  once(event: "clustersFinishedHandshaking", listener: (clusters: number) => void): this;
 }
 
 export interface ClusterManagerOptions {
-  client: typeof Client;
+  logger: ILogger;
+  clientBase: typeof Client;
   clientOptions: ClientOptions;
-  loggerOptions: Partial<LoggerOptions>;
-  webhooks: Webhooks;
-  debug: boolean;
+  startUpLogoPath: string;
+  launchModulePath: string;
+  debugMode: boolean;
+  useSyncedRequestHandler: boolean;
+  showStartupStats: boolean;
 
-  shardCount: number | "auto";
-  firstShardID: number;
-  lastShardID: number;
+  shardCountOverride: number;
+  firstShardId: number;
+  lastShardId: number;
   guildsPerShard: number;
 
-  firstClusterID: number;
-  clusterCount: number | "auto";
+  clusterIdOffset: number;
   clusterTimeout: number;
-  shardsPerCluster: number;
   ipcTimeout: number;
 
   statsUpdateInterval: number;
-  printLogoPath: string;
+  webhooks: Webhooks;
 }
 
 export interface ClusterManagerStats {
   shards: number;
   clusters: ClusterStats[];
-  clustersLaunched: number;
+  clustersIdentified: number;
   guilds: number;
   users: number;
   channels: number;
@@ -632,7 +569,7 @@ export interface ClusterManagerStats {
 export interface Webhooks {
   cluster?: WebhookOptions;
   shard?: WebhookOptions;
-  colors?: WebhookColorOptions;
+  colors?: Partial<WebhookColorOptions>;
 }
 
 export interface WebhookOptions {
@@ -645,3 +582,10 @@ export interface WebhookColorOptions {
   error: number;
   warning: number;
 }
+
+export type WebhookType = "cluster" | "shard";
+
+export type AddClusterOptions = Pick<
+  ClusterOptions,
+  "id" | "name" | "firstShardId" | "lastShardId"
+>;
