@@ -85,7 +85,7 @@ export class Cluster {
    */
   public constructor(manager: ClusterManager) {
     Object.defineProperty(this, "manager", { value: manager });
-    this.ipc = new ClusterIPC();
+    this.ipc = new ClusterIPC(manager.options.ipcTimeout);
   }
 
   /**
@@ -100,6 +100,8 @@ export class Cluster {
     // Identify the cluster
     await this._identify();
     if (this.id === -1) return;
+
+    this.ipc.clusterId = this.id;
 
     const options: ClientOptions = {
       ...clientOptions,
@@ -178,6 +180,51 @@ export class Cluster {
       if (shardId < this.firstShardId || shardId > this.lastShardId) return;
       const shard = client.shards.get(shardId);
       if (shard) shard.connect();
+    });
+
+    this.ipc.registerEvent(InternalIPCEvents.FETCH_GUILD, (data) => {
+      const value = this.client!.guilds.get(data.meta[0]);
+
+      if (value) {
+        this.ipc.sendTo(data.clusterId, {
+          op: data.fetchId,
+          d: value
+        });
+      }
+    });
+
+    this.ipc.registerEvent(InternalIPCEvents.FETCH_CHANNEL, (data) => {
+      const value = this.client!.getChannel(data.meta[0]);
+
+      if (value) {
+        this.ipc.sendTo(data.clusterId, {
+          op: data.fetchId,
+          d: value
+        });
+      }
+    });
+
+    this.ipc.registerEvent(InternalIPCEvents.FETCH_MEMBER, (data) => {
+      const guild = this.client!.guilds.get(data.meta[0]);
+      const value = guild?.members.get(data.meta[1]);
+
+      if (value) {
+        this.ipc.sendTo(data.clusterId, {
+          op: data.fetchId,
+          d: value
+        });
+      }
+    });
+
+    this.ipc.registerEvent(InternalIPCEvents.FETCH_USER, (data) => {
+      const value = this.client!.users.get(data.meta[0]);
+
+      if (value) {
+        this.ipc.sendTo(data.clusterId, {
+          op: data.fetchId,
+          d: value
+        });
+      }
     });
 
     // TODO - update stats
